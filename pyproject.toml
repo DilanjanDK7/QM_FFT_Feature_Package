@@ -1,0 +1,55 @@
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+    "QM_FFT_Analysis/tests",
+    # Add other test directories if needed
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "QM_FFT_Analysis"
+version = "0.1.0"
+authors = [
+  { name="Your Name", email="your.email@example.com" }, # TODO: Replace with your details
+]
+description = "A package for analyzing quantum mechanics data using FFT and map building techniques."
+readme = "README.md" # Assumes you have a README.md
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License", # TODO: Choose your license
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.20", # Specify minimum versions based on usage
+    "scipy>=1.7",
+    "finufft>=2.2", # Check actual required version
+    "tqdm>=4.60",
+    "plotly>=5.0", # If visualizations are part of the core package
+]
+
+[project.optional-dependencies]
+viz = [
+    "plotly>=5.0", # For visualizations
+    "matplotlib>=3.5" # Used in demo notebook visualization
+]
+test = [
+    "pytest>=7.0",
+    # Add other test dependencies here if needed
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/QM_FFT_Analysis" # TODO: Replace with your repo URL
+"Bug Tracker" = "https://github.com/yourusername/QM_FFT_Analysis/issues" # TODO: Replace
+
+[tool.setuptools.packages.find]
+where = ["."]  # Look for packages in the current directory
+include = ["QM_FFT_Analysis*"]  # Include the main package and potentially sub-packages
+exclude = ["tests*", "docs*", "notebooks*"] # Exclude test, docs, and notebooks directories from the installed package 

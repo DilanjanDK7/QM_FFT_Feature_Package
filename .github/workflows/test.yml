@@ -1,0 +1,106 @@
+name: Test and Benchmark
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, '3.10']
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov numpy scipy
+        pip install -e .
+    
+    - name: Run tests with coverage
+      run: |
+        pytest --cov=QM_FFT_Analysis --cov-report=xml tests/
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v2
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: true
+
+  benchmark:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy scipy
+        pip install -e .
+    
+    - name: Run benchmarks
+      run: |
+        python tests/benchmarks.py
+    
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v2
+      with:
+        name: benchmark-results
+        path: benchmark_results/
+    
+    - name: Compare with previous results
+      run: |
+        python - <<EOF
+        import json
+        from pathlib import Path
+        import sys
+        
+        def load_latest_results():
+            results_dir = Path("benchmark_results")
+            if not results_dir.exists():
+                return None
+            result_files = list(results_dir.glob("benchmark_results_*.json"))
+            if not result_files:
+                return None
+            latest_file = max(result_files, key=lambda x: x.stat().st_mtime)
+            with open(latest_file) as f:
+                return json.load(f)
+        
+        current_results = load_latest_results()
+        if current_results is None:
+            print("No benchmark results found")
+            sys.exit(0)
+        
+        # Compare with previous results (if available)
+        # This is a placeholder for more sophisticated comparison
+        for case_name, results in current_results.items():
+            print(f"\nResults for {case_name}:")
+            for operation, time in results["mapbuilder"].items():
+                if "time" in operation:
+                    print(f"{operation}: {time:.4f} seconds")
+        EOF
+    
+    - name: Create benchmark summary
+      if: always()
+      run: |
+        echo "## Benchmark Results" >> $GITHUB_STEP_SUMMARY
+        echo "Benchmark results have been uploaded as artifacts." >> $GITHUB_STEP_SUMMARY
+        echo "See the 'benchmark-results' artifact for detailed results." >> $GITHUB_STEP_SUMMARY 

@@ -1,0 +1,32 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+env/
+venv/
+ENV/
+
+.pytest_cache/
+.mypy_cache/
+.coverage
+
+*.egg-info/
+.eggs/
+*.egg
+
+dist/
+build/
+*.whl
+
+.git
+.gitignore
+.dockerignore
+
+notebooks/
+*.ipynb
+*.myst.md
+
+# Add specific large data files or directories if needed
+# tests/demo_output/ 
