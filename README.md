@@ -2,6 +2,10 @@
 
 This package provides tools for analyzing 3D data, potentially representing quantum mechanical properties or other spatial fields, using Non-Uniform Fast Fourier Transforms (NUFFT) via the FINUFFT library.
 
+## Developer Information
+**Developer:** Dilanjan DK  
+**Contact:** ddiyabal@uwo.ca
+
 ## Features
 
 *   **NUFFT Implementation:** Leverages FINUFFT for efficient transformation between non-uniform points and a uniform grid.
@@ -39,7 +43,7 @@ The typical output structure is detailed in [HOW-TO.md](./HOW-TO.md).
 
 ## License
 
-(Specify project license)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. Copyright (c) 2024 Dilanjan DK.
 
 ```python
 import numpy as np
