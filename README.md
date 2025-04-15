@@ -47,17 +47,13 @@ See the [HOW-TO.md](./HOW-TO.md) guide for detailed installation steps using `ve
 
 ## Usage
 
-Detailed usage instructions and a practical example can be found in the [HOW-TO.md](./HOW-TO.md) guide.
+Detailed usage instructions and a practical example can be found in the [HOW-TO Guide](./HOW-TO.md).
 
-See also the guides in the `docs/` directory for more in-depth information on specific components:
-
-*   `docs/map_builder_guide.md`: Explains the `MapBuilder` class and its methods.
-*   `docs/analysis_module_guide.md`: Details the functions available for analyzing non-uniform inverse maps.
-*   `docs/preprocessing_guide.md`: Covers preprocessing functions.
+For in-depth information on specific components, refer to the [Documentation](#documentation) section below.
 
 ## Output Structure
 
-The typical output structure is detailed in [HOW-TO.md](./HOW-TO.md).
+The typical output structure is detailed in the [HOW-TO Guide](./HOW-TO.md).
 
 ## Contributing
 
@@ -66,6 +62,46 @@ The typical output structure is detailed in [HOW-TO.md](./HOW-TO.md).
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. Copyright (c) 2024 Dilanjan DK.
+
+## Documentation
+
+The package includes comprehensive documentation for users and developers:
+
+### Core Documentation
+* [Technical Reference](docs/technical_reference.md): Comprehensive explanation of FFT functions, neuroimaging applications, and k-space masking techniques
+* [Comprehensive Guide](docs/comprehensive_guide.myst.md): Detailed overview of the package's functionality and applications
+* [Map Builder Guide](docs/map_builder_guide.md): Focused explanation of the `MapBuilder` class and its methods
+
+### Additional Resources
+* [Analysis Module Guide](docs/analysis_module_guide.md): Details on analytical functions for non-uniform inverse maps
+* [Testing Documentation](docs/testing.md): Information on testing procedures and validation
+
+### Installation and Usage
+* [HOW-TO Guide](./HOW-TO.md): Step-by-step instructions for installation and basic usage
+
+### Jupyter Notebook
+* [Interactive Guide](docs/comprehensive_guide.ipynb): Jupyter notebook with interactive examples and visualizations
+
+## References
+
+This package relies on the FINUFFT library for efficient non-uniform Fast Fourier Transforms:
+
+* Barnett, A. H., Magland, J., & af Klinteberg, L. (2019). A Parallel Nonuniform Fast Fourier Transform Library Based on an "Exponential of Semicircle" Kernel. SIAM Journal on Scientific Computing, 41(5), C479–C504. https://doi.org/10.1137/18M1173014
+
+* FINUFFT GitHub Repository: https://github.com/flatironinstitute/finufft
+
+For a complete list of references and academic background, see the [Technical Reference](docs/technical_reference.md#references) document.
+
+## Containerization
+
+A `Dockerfile` is provided to build a container image with the package and its dependencies installed.
+
+```bash
+docker build -t qm-fft-analysis .
+docker run -it --rm -v $(pwd)/output:/app/output qm-fft-analysis python your_script.py 
+```
+
+Replace `your_script.py` with the script you want to run inside the container. The `-v` flag mounts your local `output` directory to `/app/output` inside the container, allowing you to retrieve results.
 
 ```python
 import numpy as np
@@ -117,20 +153,3 @@ builder.compute_forward_fft()
 #     # builder.generate_volume_plot(gradient_map_t1, "gradient_map_t1.html")
 
 ```
-
-## Documentation
-
-*   [FINUFFT Map Builder Documentation](QM_FFT_Analysis/docs/finufft_map_builder.md)
-*   [Workflow Documentation](QM_FFT_Analysis/docs/workflow_preprocessing_fft.md)
-*   [Comprehensive Guide](docs/comprehensive_guide.myst.md)
-
-## Containerization
-
-A `Dockerfile` is provided to build a container image with the package and its dependencies installed.
-
-```bash
-docker build -t qm-fft-analysis .
-docker run -it --rm -v $(pwd)/output:/app/output qm-fft-analysis python your_script.py 
-```
-
-Replace `your_script.py` with the script you want to run inside the container. The `-v` flag mounts your local `output` directory to `/app/output` inside the container, allowing you to retrieve results. 
