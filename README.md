@@ -19,6 +19,28 @@ This package provides tools for analyzing 3D data, potentially representing quan
 *   **Logging:** Provides detailed logging of the processing steps.
 *   **Directory Structure:** Organizes outputs into `data`, `plots`, and `analysis` subdirectories for each subject ID.
 
+## Workflow
+
+The package implements a computational pipeline that processes 3D data using the following workflow:
+
+```mermaid
+graph LR
+    A[Input Data\n3D Coordinates & Strengths] --> B[Forward FFT\nSource Space to K-Space]
+    B --> C[K-Space Masking\nFrequency Selection]
+    C --> D[Inverse FFT\nK-Space to Source Space]
+    D --> E[Gradient Analysis\nDetect Spatial Changes]
+    E --> F[Results\nMaps & Visualizations]
+    
+    style A fill:#f9f9f9,stroke:#333,stroke-width:1px
+    style B fill:#d1e7dd,stroke:#333,stroke-width:1px
+    style C fill:#d1e7dd,stroke:#333,stroke-width:1px
+    style D fill:#d1e7dd,stroke:#333,stroke-width:1px
+    style E fill:#cff4fc,stroke:#333,stroke-width:1px
+    style F fill:#f8d7da,stroke:#333,stroke-width:1px
+```
+
+For a comprehensive explanation of the package's functionality, including detailed technical information about FFT functions, neuroimaging applications, and k-space masking techniques, see the [Technical Reference](docs/technical_reference.md).
+
 ## Installation
 
 See the [HOW-TO.md](./HOW-TO.md) guide for detailed installation steps using `venv` or `conda`.
