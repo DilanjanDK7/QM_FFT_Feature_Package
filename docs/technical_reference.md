@@ -453,14 +453,20 @@ Typical performance benchmarks on standard hardware (as of 2024):
 
 ## References
 
-1. Barnett, A. H., Magland, J., & af Klinteberg, L. (2019). A Parallel Nonuniform Fast Fourier Transform Library Based on an "Exponential of Semicircle" Kernel. SIAM Journal on Scientific Computing, 41(5), C479–C504. https://doi.org/10.1137/18M1173014
+### FINUFFT Citations
+1. Barnett, A. H., Magland, J., & af Klinteberg, L. (2019). A Parallel Nonuniform Fast Fourier Transform Library Based on an "Exponential of Semicircle" Kernel. SIAM Journal on Scientific Computing, 41(5), C479–C504. https://doi.org/10.1137/18M1173014 ([arXiv version](https://arxiv.org/abs/1808.06736))
 
-2. Keiner, J., Kunis, S., & Potts, D. (2009). Using NFFT 3—A Software Library for Various Nonequispaced Fast Fourier Transforms. ACM Transactions on Mathematical Software, 36(4), 1–30. https://doi.org/10.1145/1555386.1555388
+2. Barnett, A. H. (2021). Aliasing error of the exp⁡(β√(1-z²)) kernel in the nonuniform fast Fourier transform. Applied and Computational Harmonic Analysis, 51, 1-16. https://doi.org/10.1016/j.acha.2020.08.007 ([arXiv version](https://arxiv.org/abs/1910.00850))
 
-3. Cohen, M. X. (2014). Analyzing Neural Time Series Data: Theory and Practice. MIT Press.
+3. Shih, Y.-H., Wright, G., Andén, J., Blaschke, J., & Barnett, A. H. (2021). cuFINUFFT: a load-balanced GPU library for general-purpose nonuniform FFTs. PDSEC2021 workshop of the IPDPS2021 conference. ([arXiv version](https://arxiv.org/abs/2102.08463))
 
-4. Wendel, K., Väisänen, O., Malmivuo, J., Gencer, N. G., Vanrumste, B., Durka, P., Magjarević, R., Supek, S., Pascu, M. L., Fontenelle, H., & Grave de Peralta Menendez, R. (2009). EEG/MEG Source Imaging: Methods, Challenges, and Open Issues. Computational Intelligence and Neuroscience, 2009, 1–12. https://doi.org/10.1155/2009/656092
+### Other References
+4. Keiner, J., Kunis, S., & Potts, D. (2009). Using NFFT 3—A Software Library for Various Nonequispaced Fast Fourier Transforms. ACM Transactions on Mathematical Software, 36(4), 1–30. https://doi.org/10.1145/1555386.1555388
 
-5. Lopes da Silva, F. (2013). EEG and MEG: Relevance to Neuroscience. Neuron, 80(5), 1112–1128. https://doi.org/10.1016/j.neuron.2013.10.017
+5. Cohen, M. X. (2014). Analyzing Neural Time Series Data: Theory and Practice. MIT Press.
 
-6. Tadel, F., Baillet, S., Mosher, J. C., Pantazis, D., & Leahy, R. M. (2011). Brainstorm: A User-Friendly Application for MEG/EEG Analysis. Computational Intelligence and Neuroscience, 2011, 1–13. https://doi.org/10.1155/2011/879716 
+6. Wendel, K., Väisänen, O., Malmivuo, J., Gencer, N. G., Vanrumste, B., Durka, P., Magjarević, R., Supek, S., Pascu, M. L., Fontenelle, H., & Grave de Peralta Menendez, R. (2009). EEG/MEG Source Imaging: Methods, Challenges, and Open Issues. Computational Intelligence and Neuroscience, 2009, 1–12. https://doi.org/10.1155/2009/656092
+
+7. Lopes da Silva, F. (2013). EEG and MEG: Relevance to Neuroscience. Neuron, 80(5), 1112–1128. https://doi.org/10.1016/j.neuron.2013.10.017
+
+8. Tadel, F., Baillet, S., Mosher, J. C., Pantazis, D., & Leahy, R. M. (2011). Brainstorm: A User-Friendly Application for MEG/EEG Analysis. Computational Intelligence and Neuroscience, 2011, 1–13. https://doi.org/10.1155/2011/879716 
