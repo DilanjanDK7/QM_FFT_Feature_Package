@@ -61,7 +61,11 @@ The typical output structure is detailed in the [HOW-TO Guide](./HOW-TO.md).
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. Copyright (c) 2024 Dilanjan DK.
+This package is private and copyrighted.
+
+All rights reserved. Unauthorized copying, distribution, modification, or use of the software, in whole or in part, is strictly prohibited without the express written permission of the copyright holders (Dilanjan DK and BrainLab).
+
+For licensing or usage inquiries, contact: ddiyabal@uwo.ca
 
 ## Documentation
 
