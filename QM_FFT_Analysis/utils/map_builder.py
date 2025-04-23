@@ -31,7 +31,7 @@ class MapBuilder:
 
     def __init__(self, subject_id, output_dir, x, y, z, strengths, 
                  nx=None, ny=None, nz=None, eps=1e-6, upsampling_factor=2, dtype='complex128', estimate_grid=True,
-                 normalize_fft_result=False, padding=0, stride=1, enable_enhanced_features=False, 
+                 normalize_fft_result=False, padding=0, stride=1, enable_enhanced_features=True, 
                  config_path=None):
         """Initialize MapBuilder.
 
@@ -54,7 +54,7 @@ class MapBuilder:
             normalize_fft_result (bool, optional): Normalize FFT power spectrum. Defaults to False.
             padding (int, optional): [Deprecated/Test Compatibility] Padding factor. Defaults to 0.
             stride (int, optional): Stride for k-space sampling. Defaults to 1.
-            enable_enhanced_features (bool, optional): Enable enhanced features. Defaults to False.
+            enable_enhanced_features (bool, optional): Enable enhanced features. Defaults to True.
             config_path (str or Path, optional): Path to custom configuration file for enhanced features.
         """
         # Input validation
@@ -212,6 +212,9 @@ class MapBuilder:
             for key, value in data.items():
                 self._save_to_hdf5(group, key, value, compression, compression_opts)
         elif isinstance(data, np.ndarray):
+            # Convert data to float16 if it's a real-valued array
+            if np.isrealobj(data):
+                data = data.astype(np.float16)
             # Save NumPy array directly
             file_or_group.create_dataset(name, data=data, compression=compression, compression_opts=compression_opts)
         else:
@@ -219,6 +222,9 @@ class MapBuilder:
             try:
                 # Convert basic python types (or lists/tuples of them) to numpy arrays for saving
                 serializable_data = np.array(data) 
+                # Convert to float16 if it's a real-valued array
+                if np.isrealobj(serializable_data):
+                    serializable_data = serializable_data.astype(np.float16)
                 # Check if conversion resulted in object dtype (often indicates mixed types or unhandled objects)
                 if serializable_data.dtype == object:
                     # Fallback to string if it's an object array
