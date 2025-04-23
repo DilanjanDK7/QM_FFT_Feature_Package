@@ -634,3 +634,259 @@ map_builder.process_map(
    - Normalize in batches for large datasets
    - Use float32 for memory efficiency
    - Cache normalized results for repeated analyses
+
+## Pipeline Architecture
+
+### Complete Processing Pipeline
+
+```mermaid
+graph TB
+    %% Data Input and Preprocessing
+    Input[/"Input Data<br/>Time Series & Coordinates"/] --> Preprocess["Preprocessing<br/>(normalize_time_series)"]
+    Preprocess --> ComplexConv["Complex Conversion<br/>(normalize_complex_data)"]
+    ComplexConv --> WaveFn["Wavefunction Normalization<br/>(get_normalized_wavefunctions)"]
+    
+    %% MapBuilder Initialization
+    WaveFn --> Init["MapBuilder Initialization<br/>Grid Size Estimation"]
+    
+    %% Forward FFT
+    Init --> ForwardFFT["Forward FFT<br/>(FINUFFT Type 1)"]
+    ForwardFFT --> FFTNorm["FFT Normalization<br/>Probability Density"]
+    
+    %% K-Space Processing
+    FFTNorm --> KSpace["K-Space Processing"]
+    
+    subgraph "K-Space Operations"
+        KSpace --> |Generate|Masks["K-Space Masks"]
+        Masks --> |Spherical|Mask1["Mask 1"]
+        Masks --> |Spherical|Mask2["Mask 2"]
+        Masks --> |Custom|MaskN["Mask N"]
+    end
+    
+    %% Inverse Transform
+    Mask1 --> InvFFT["Inverse FFT<br/>(FINUFFT Type 2)"]
+    Mask2 --> InvFFT
+    MaskN --> InvFFT
+    
+    %% Analysis
+    InvFFT --> Analysis["Analysis Pipeline"]
+    
+    subgraph "Analysis Operations"
+        Analysis --> |Basic|Basic["Basic Metrics<br/>- Magnitude<br/>- Phase"]
+        Analysis --> |Enhanced|Enhanced["Enhanced Features<br/>- Spectral Metrics<br/>- Gradient Maps"]
+        Analysis --> |Statistical|Stats["Statistical Analysis<br/>- Local Variance<br/>- Temporal Diff"]
+    end
+    
+    %% Results Storage
+    Basic --> Storage["HDF5 Storage"]
+    Enhanced --> Storage
+    Stats --> Storage
+    
+    subgraph "Output Files"
+        Storage --> Data["data.h5<br/>Raw Results"]
+        Storage --> AnalysisOut["analysis.h5<br/>Analysis Results"]
+        Storage --> EnhancedOut["enhanced.h5<br/>Enhanced Features"]
+    end
+    
+    %% Styling
+    classDef process fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef data fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
+    classDef storage fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    
+    class Input,Data,AnalysisOut,EnhancedOut data;
+    class Preprocess,ComplexConv,WaveFn,ForwardFFT,FFTNorm,KSpace,InvFFT,Analysis process;
+    class Storage storage;
+```
+
+### Data Flow Details
+
+1. **Input Processing**
+   - Time series data normalization
+   - Complex data conversion
+   - Wavefunction preparation
+
+2. **Forward Transform**
+   - Grid size estimation
+   - FINUFFT Type 1 transform
+   - Probability density normalization
+
+3. **K-Space Operations**
+   - Mask generation (spherical/custom)
+   - Frequency component selection
+   - Multi-scale analysis
+
+4. **Inverse Transform**
+   - FINUFFT Type 2 transform
+   - Multiple mask processing
+   - Parallel computation
+
+5. **Analysis Pipeline**
+   - Basic metrics computation
+   - Enhanced feature extraction
+   - Statistical analysis
+
+6. **Results Storage**
+   - HDF5 file organization
+   - Compression and optimization
+   - Structured data management
+
+## MapBuilder and Gradient Analysis
+
+### MapBuilder Class Architecture
+
+```mermaid
+classDiagram
+    class MapBuilder {
+        +str subject_id
+        +str output_dir
+        +ndarray x, y, z
+        +ndarray strengths
+        +bool enable_enhanced_features
+        +bool normalize_fft_result
+        
+        +__init__(subject_id, output_dir, x, y, z, strengths)
+        +compute_forward_fft()
+        +generate_kspace_masks(n_centers, radius)
+        +compute_inverse_maps()
+        +compute_gradient_maps()
+        +process_map()
+        -_estimate_grid_size()
+        -_normalize_fft_result()
+        -_setup_logging()
+    }
+
+    class DataManager {
+        +HDF5Manager hdf5_manager
+        +save_fft_result()
+        +save_masks()
+        +save_inverse_maps()
+        +save_gradient_maps()
+    }
+
+    class AnalysisManager {
+        +compute_magnitude()
+        +compute_phase()
+        +compute_local_variance()
+        +compute_enhanced_metrics()
+    }
+
+    MapBuilder --> DataManager : uses
+    MapBuilder --> AnalysisManager : uses
+```
+
+### Gradient Maps Computation Pipeline
+
+```mermaid
+graph TB
+    %% Input Data
+    InvMap[/"Inverse Maps<br/>(n_masks × n_times × n_points)"/] --> GradientChoice{"Gradient<br/>Method"}
+    
+    %% Method Selection
+    GradientChoice -->|Analytical| KSpace["K-Space Method"]
+    GradientChoice -->|Interpolation| Grid["Grid Method"]
+    
+    %% Analytical Method
+    subgraph "Analytical Gradient Computation"
+        KSpace --> |"1. Multiply by ik"|KDeriv["K-Space Derivatives<br/>∂/∂x, ∂/∂y, ∂/∂z"]
+        KDeriv --> |"2. Inverse FFT"|SpatialDeriv["Spatial Derivatives"]
+        SpatialDeriv --> |"3. Magnitude"|GradMagA["Gradient Magnitude<br/>√(|∂f/∂x|² + |∂f/∂y|² + |∂f/∂z|²)"]
+    end
+    
+    %% Interpolation Method
+    subgraph "Grid-Based Gradient Computation"
+        Grid --> |"1. Interpolate"|GridData["Regular Grid Data"]
+        GridData --> |"2. Finite Differences"|GridDeriv["Grid Derivatives"]
+        GridDeriv --> |"3. Magnitude"|GradMagG["Gradient Magnitude"]
+        GridDeriv --> |"4. Interpolate Back"|FinalGrad["Final Gradient"]
+    end
+    
+    %% Results Processing
+    GradMagA --> Results["Gradient Maps"]
+    FinalGrad --> Results
+    
+    %% Storage
+    Results --> |"Save to HDF5"|Storage["Enhanced Features<br/>enhanced.h5"]
+    
+    %% Performance Metrics
+    subgraph "Performance Comparison"
+        direction LR
+        Analytical["Analytical Method<br/>~2-5x faster"]
+        Interpolation["Interpolation Method<br/>More accurate for<br/>irregular points"]
+    end
+    
+    %% Styling
+    classDef input fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
+    classDef process fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px;
+    classDef output fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    
+    class InvMap input;
+    class KSpace,Grid,GridData,KDeriv,SpatialDeriv process;
+    class Results,Storage output;
+```
+
+### Gradient Computation Details
+
+1. **Analytical Method**
+   ```python
+   def compute_gradient_analytical(self, data):
+       """
+       Compute gradients directly in k-space
+       1. Forward FFT of inverse maps
+       2. Multiply by ik in each direction
+       3. Inverse FFT to get spatial derivatives
+       4. Compute magnitude
+       """
+       # Get k-space coordinates
+       kx, ky, kz = self._get_k_coordinates()
+       
+       # Forward FFT
+       fft_data = self.compute_forward_fft(data)
+       
+       # Compute derivatives in k-space
+       dx = self.compute_inverse_fft(1j * kx * fft_data)
+       dy = self.compute_inverse_fft(1j * ky * fft_data)
+       dz = self.compute_inverse_fft(1j * kz * fft_data)
+       
+       # Compute magnitude
+       return np.sqrt(np.abs(dx)**2 + np.abs(dy)**2 + np.abs(dz)**2)
+   ```
+
+2. **Grid Method**
+   ```python
+   def compute_gradient_interpolation(self, data):
+       """
+       Compute gradients using grid interpolation
+       1. Interpolate onto regular grid
+       2. Compute spatial derivatives
+       3. Interpolate back to original points
+       """
+       # Create regular grid
+       grid_x, grid_y, grid_z = np.meshgrid(
+           np.linspace(x.min(), x.max(), nx),
+           np.linspace(y.min(), y.max(), ny),
+           np.linspace(z.min(), z.max(), nz)
+       )
+       
+       # Interpolate data to grid
+       grid_data = griddata(
+           (x, y, z), data,
+           (grid_x, grid_y, grid_z),
+           method='cubic'
+       )
+       
+       # Compute derivatives
+       dx = np.gradient(grid_data, grid_x[0,:,0], axis=0)
+       dy = np.gradient(grid_data, grid_y[:,0,0], axis=1)
+       dz = np.gradient(grid_data, grid_z[0,0,:], axis=2)
+       
+       # Compute magnitude
+       grad_mag = np.sqrt(dx**2 + dy**2 + dz**2)
+       
+       # Interpolate back to original points
+       return griddata(
+           (grid_x.flatten(), grid_y.flatten(), grid_z.flatten()),
+           grad_mag.flatten(),
+           (x, y, z),
+           method='cubic'
+       )
+   ```

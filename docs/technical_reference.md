@@ -741,6 +741,347 @@ The package includes several optimizations for efficient processing:
    - Efficient memory usage
    - Parallel processing where applicable
 
+## Technical Pipeline Architecture
+
+### Complete Data Flow and Processing Pipeline
+
+```mermaid
+graph TB
+    %% Input Data Structure
+    Input[/"Input Data Structure"/] --> |"Shape: (n_sources, n_time)"|TimeData["Time Series Data"]
+    Input --> |"Shape: (n_points, 3)"|Coords["Spatial Coordinates<br/>(x, y, z)"]
+    
+    %% Preprocessing Pipeline
+    TimeData --> |"normalize_time_series()"|Norm["Time Series Normalization"]
+    Norm --> |"method='zscore'/'minmax'/'robust'"|NormTS["Normalized Time Series"]
+    NormTS --> |"get_normalized_wavefunctions()"|Complex["Complex Conversion"]
+    Complex --> |"Shape: (n_times, n_points)"|WaveFn["Normalized Wavefunctions"]
+    
+    %% Grid Estimation
+    Coords --> GridEst["Grid Size Estimation"]
+    GridEst --> |"estimate_grid_size()"|Grid["Uniform Grid<br/>(nx, ny, nz)"]
+    
+    %% Forward FFT
+    WaveFn --> |"Input"|NUFFT1["FINUFFT Type 1"]
+    Coords --> |"Coordinates"|NUFFT1
+    Grid --> |"Grid Dimensions"|NUFFT1
+    NUFFT1 --> |"Shape: (n_times, nx, ny, nz)"|FFTResult["K-Space Representation"]
+    
+    %% K-Space Processing
+    FFTResult --> KNorm["K-Space Normalization"]
+    KNorm --> |"normalize_fft_result=True"|ProbDens["Probability Density"]
+    
+    subgraph "Mask Generation"
+        ProbDens --> |"generate_kspace_masks()"|MaskGen["Mask Generation"]
+        MaskGen --> |"n_centers, radius"|SphericalMasks["Spherical Masks"]
+        MaskGen --> |"kx/ky/kz bounds"|CubicMasks["Cubic Masks"]
+        MaskGen --> |"axis, k_value"|SlabMasks["Slab Masks"]
+    end
+    
+    %% Inverse Transform
+    SphericalMasks --> |"Shape: (nx, ny, nz)"|MaskedK["Masked K-Space"]
+    CubicMasks --> MaskedK
+    SlabMasks --> MaskedK
+    MaskedK --> NUFFT2["FINUFFT Type 2"]
+    Coords --> |"Coordinates"|NUFFT2
+    Grid --> |"Grid Dimensions"|NUFFT2
+    
+    %% Analysis Pipeline
+    NUFFT2 --> |"Shape: (n_masks, n_times, n_points)"|InvMaps["Inverse Maps"]
+    
+    subgraph "Analysis Methods"
+        InvMaps --> BasicAnalysis["Basic Analysis"]
+        InvMaps --> EnhancedAnalysis["Enhanced Analysis"]
+        
+        %% Basic Analysis
+        BasicAnalysis --> |"compute_magnitude()"|Mag["Magnitude"]
+        BasicAnalysis --> |"compute_phase()"|Phase["Phase"]
+        BasicAnalysis --> |"compute_local_variance()"|LocalVar["Local Variance"]
+        
+        %% Enhanced Analysis
+        EnhancedAnalysis --> |"compute_spectral_slope()"|Slope["Spectral Slope"]
+        EnhancedAnalysis --> |"compute_spectral_entropy()"|Entropy["Spectral Entropy"]
+        EnhancedAnalysis --> |"compute_gradient_maps()"|Gradient["Gradient Maps"]
+    end
+    
+    %% Results Storage
+    subgraph "HDF5 Storage"
+        Mag --> |"analysis.h5"|Analysis["Analysis Results"]
+        Phase --> |"analysis.h5"|Analysis
+        LocalVar --> |"analysis.h5"|Analysis
+        
+        FFTResult --> |"data.h5"|RawData["Raw Data"]
+        MaskedK --> |"data.h5"|RawData
+        InvMaps --> |"data.h5"|RawData
+        
+        Slope --> |"enhanced.h5"|Enhanced["Enhanced Features"]
+        Entropy --> |"enhanced.h5"|Enhanced
+        Gradient --> |"enhanced.h5"|Enhanced
+    end
+    
+    %% Data Types and Memory
+    subgraph "Memory Management"
+        RawData --> |"GZIP Level 9"|Compression["Data Compression"]
+        Analysis --> |"GZIP Level 9"|Compression
+        Enhanced --> |"GZIP Level 9"|Compression
+    end
+    
+    %% Styling
+    classDef input fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
+    classDef process fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px;
+    classDef data fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    classDef storage fill:#f1f8e9,stroke:#33691e,stroke-width:2px;
+    
+    class Input,TimeData,Coords input;
+    class NUFFT1,NUFFT2,BasicAnalysis,EnhancedAnalysis process;
+    class FFTResult,InvMaps,MaskedK data;
+    class RawData,Analysis,Enhanced storage;
+```
+
+### Technical Implementation Details
+
+1. **Data Structures**
+   ```
+   Input Data
+   ├── Time Series: (n_sources × n_time)
+   ├── Coordinates: (n_points × 3)
+   └── Output
+       ├── FFT Result: (n_times × nx × ny × nz)
+       ├── Masks: (n_masks × nx × ny × nz)
+       └── Inverse Maps: (n_masks × n_times × n_points)
+   ```
+
+2. **Memory Management**
+   ```
+   HDF5 Structure
+   ├── data.h5
+   │   ├── forward_fft: (n_times × nx × ny × nz)
+   │   ├── kspace_masks: (n_masks × nx × ny × nz)
+   │   └── inverse_maps: (n_masks × n_times × n_points)
+   ├── analysis.h5
+   │   ├── magnitude: (n_masks × n_times × n_points)
+   │   ├── phase: (n_masks × n_times × n_points)
+   │   └── local_variance: (n_masks × n_times × n_points)
+   └── enhanced.h5
+       ├── spectral_metrics: (n_times × n_metrics)
+       └── gradient_maps: (n_masks × n_times × nx × ny × nz)
+   ```
+
+3. **Computational Flow**
+   ```
+   Processing Steps
+   ├── Preprocessing: O(n_sources × n_time)
+   ├── Forward FFT: O(n_points × log(nx×ny×nz))
+   ├── Mask Operations: O(nx × ny × nz)
+   ├── Inverse FFT: O(n_points × log(nx×ny×nz))
+   └── Analysis: O(n_masks × n_times × n_points)
+   ```
+
+## MapBuilder Implementation Details
+
+### Class Architecture and Dependencies
+
+```mermaid
+classDiagram
+    class MapBuilder {
+        %% Core Attributes
+        -ndarray _x, _y, _z
+        -ndarray _strengths
+        -int _n_trans
+        -int _n_points
+        -int nx, ny, nz
+        
+        %% Configuration
+        -float eps
+        -str dtype
+        -bool estimate_grid
+        -float upsample_factor
+        
+        %% Results Storage
+        -ndarray fft_result
+        -list kspace_masks
+        -list inverse_maps
+        -list gradient_maps
+        -dict analysis_results
+        
+        %% Methods
+        +__init__(subject_id, output_dir, coordinates, strengths)
+        +compute_forward_fft()
+        +generate_kspace_masks(n_centers, radius)
+        +compute_inverse_maps()
+        +compute_gradient_maps(method)
+        +analyze_inverse_maps(analyses)
+        +process_map(config)
+        
+        %% Private Methods
+        -_validate_inputs()
+        -_estimate_grid_size()
+        -_setup_finufft()
+        -_normalize_results()
+    }
+
+    class FINUFFT {
+        +type1
+        +type2
+        +plan
+    }
+
+    class HDF5Manager {
+        +create_file()
+        +save_dataset()
+        +load_dataset()
+        +compress_data()
+    }
+
+    class Logger {
+        +setup()
+        +info()
+        +warning()
+        +error()
+    }
+
+    MapBuilder --> FINUFFT : uses
+    MapBuilder --> HDF5Manager : uses
+    MapBuilder --> Logger : uses
+```
+
+### Gradient Computation Technical Details
+
+```mermaid
+graph TB
+    %% Input and Configuration
+    Input[/"Input Parameters<br/>- Data Shape<br/>- Grid Size<br/>- Method Choice"/] --> Config["Configuration"]
+    Config --> |"Analytical"|AMethod["Analytical Method"]
+    Config --> |"Grid-Based"|GMethod["Grid Method"]
+    
+    %% Analytical Method Implementation
+    subgraph "Analytical Gradient Pipeline"
+        AMethod --> AFFT["Forward FFT<br/>Type 1 NUFFT"]
+        AFFT --> KDerivatives["K-Space Derivatives<br/>∇f = F⁻¹{ik·F{f}}"]
+        KDerivatives --> |"∂/∂x"|Dx["dx = F⁻¹{ikx·F{f}}"]
+        KDerivatives --> |"∂/∂y"|Dy["dy = F⁻¹{iky·F{f}}"]
+        KDerivatives --> |"∂/∂z"|Dz["dz = F⁻¹{ikz·F{f}}"]
+        
+        Dx --> |"Magnitude"|GMag["Gradient Magnitude"]
+        Dy --> |"Magnitude"|GMag
+        Dz --> |"Magnitude"|GMag
+    end
+    
+    %% Grid Method Implementation
+    subgraph "Grid-Based Pipeline"
+        GMethod --> GridSetup["Grid Setup<br/>nx × ny × nz"]
+        GridSetup --> Interp1["Interpolation<br/>Non-uniform to Grid"]
+        Interp1 --> FDiff["Finite Differences<br/>∇f ≈ (f[i+1] - f[i-1])/2h"]
+        FDiff --> |"Compute"|GDx["dx/dx"]
+        FDiff --> |"Compute"|GDy["dy/dy"]
+        FDiff --> |"Compute"|GDz["dz/dz"]
+        
+        GDx --> |"Magnitude"|GridMag["Grid Magnitude"]
+        GDy --> |"Magnitude"|GridMag
+        GDz --> |"Magnitude"|GridMag
+        
+        GridMag --> Interp2["Interpolation<br/>Grid to Non-uniform"]
+    end
+    
+    %% Results Processing
+    GMag --> Results["Gradient Maps"]
+    Interp2 --> Results
+    
+    %% Performance Analysis
+    subgraph "Performance Metrics"
+        direction TB
+        CompTime["Computation Time"]
+        MemUsage["Memory Usage"]
+        Accuracy["Accuracy"]
+        
+        CompTime --> |"Analytical"|ATime["2-5x Faster"]
+        CompTime --> |"Grid"|GTime["Memory Intensive"]
+        
+        MemUsage --> |"Analytical"|AMem["O(n_points)"]
+        MemUsage --> |"Grid"|GMem["O(nx·ny·nz)"]
+        
+        Accuracy --> |"Analytical"|AAcc["Better for<br/>Uniform Points"]
+        Accuracy --> |"Grid"|GAcc["Better for<br/>Irregular Points"]
+    end
+    
+    %% Styling
+    classDef config fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef process fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+    classDef results fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    
+    class Input,Config config
+    class AFFT,GMethod,GridSetup,FDiff process
+    class Results,GMag,GridMag results
+```
+
+### Implementation Specifications
+
+1. **Memory Management**
+   ```python
+   # Memory requirements for different methods
+   analytical_method_memory = {
+       'forward_fft': 'O(n_points)',
+       'k_derivatives': 'O(3 * n_points)',
+       'total': 'O(4 * n_points)'
+   }
+   
+   grid_method_memory = {
+       'grid_data': 'O(nx * ny * nz)',
+       'derivatives': 'O(3 * nx * ny * nz)',
+       'interpolation': 'O(n_points)',
+       'total': 'O(4 * nx * ny * nz + n_points)'
+   }
+   ```
+
+2. **Computational Complexity**
+   ```python
+   # Operation counts for each method
+   analytical_operations = {
+       'forward_fft': 'O(n_points * log(nx*ny*nz))',
+       'k_multiplication': 'O(nx * ny * nz)',
+       'inverse_fft': 'O(n_points * log(nx*ny*nz))',
+       'magnitude': 'O(n_points)'
+   }
+   
+   grid_operations = {
+       'interpolation_to_grid': 'O(n_points * log(n_points))',
+       'finite_differences': 'O(nx * ny * nz)',
+       'magnitude': 'O(nx * ny * nz)',
+       'interpolation_from_grid': 'O(n_points * log(n_points))'
+   }
+   ```
+
+3. **Precision Analysis**
+   ```python
+   # Error estimates for different methods
+   error_estimates = {
+       'analytical': {
+           'uniform_points': '~1e-6',
+           'irregular_points': '~1e-4',
+           'limiting_factor': 'FFT precision'
+       },
+       'grid': {
+           'uniform_points': '~1e-5',
+           'irregular_points': '~1e-5',
+           'limiting_factor': 'Interpolation order'
+       }
+   }
+   ```
+
+4. **Method Selection Criteria**
+   ```python
+   def select_gradient_method(points, grid_size, timing_critical=False):
+       """
+       Criteria for selecting gradient computation method
+       """
+       if timing_critical:
+           return 'analytical'
+       elif is_irregular_distribution(points):
+           return 'grid'
+       else:
+           return 'analytical'
+   ```
+
 ## References
 
 ### FINUFFT Citations
