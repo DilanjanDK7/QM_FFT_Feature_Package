@@ -244,3 +244,393 @@ builder.compute_forward_fft()
 #     # builder.generate_volume_plot(gradient_map_t1, "gradient_map_t1.html")
 
 ```
+
+## Complete Pipeline Execution
+
+### Basic Usage
+
+```python
+import numpy as np
+from QM_FFT_Analysis.utils.map_builder import MapBuilder
+
+# 1. Prepare your data
+n_points = 5000  # Number of spatial points
+n_times = 10    # Number of time points/transforms
+
+# Generate or load your coordinates
+x = np.random.uniform(-np.pi, np.pi, n_points)
+y = np.random.uniform(-np.pi, np.pi, n_points)
+z = np.random.uniform(-np.pi, np.pi, n_points)
+
+# Generate or load your strength values (complex-valued)
+strengths = np.random.randn(n_times, n_points) + 1j * np.random.randn(n_times, n_points)
+
+# 2. Initialize MapBuilder
+map_builder = MapBuilder(
+    subject_id='example_subject',
+    output_dir='/path/to/output',
+    x=x, 
+    y=y, 
+    z=z,
+    strengths=strengths,
+    enable_enhanced_features=True,  # Enable additional analysis features
+    normalize_fft_result=True       # Normalize FFT results
+)
+
+# 3. Run the complete pipeline
+map_builder.process_map(
+    n_centers=2,              # Number of spherical masks
+    radius=0.5,              # Radius of masks in k-space
+    analyses_to_run=[        # List of analyses to perform
+        'magnitude',
+        'phase',
+        'spectral_slope',
+        'spectral_entropy'
+    ]
+)
+```
+
+### Full Parameter Reference
+
+#### MapBuilder Initialization
+
+```python
+MapBuilder(
+    subject_id: str,          # Unique identifier for the subject
+    output_dir: str,          # Directory for output files
+    x: np.ndarray,           # X coordinates (shape: n_points)
+    y: np.ndarray,           # Y coordinates (shape: n_points)
+    z: np.ndarray,           # Z coordinates (shape: n_points)
+    strengths: np.ndarray,   # Complex strengths (shape: n_times × n_points)
+    
+    # Optional parameters
+    enable_enhanced_features: bool = False,  # Enable advanced analysis
+    normalize_fft_result: bool = True,       # Normalize FFT results
+    eps: float = 1e-6,                      # FINUFFT precision
+    dtype: str = 'complex64',               # Data type for calculations
+    estimate_grid: bool = True,             # Auto-estimate grid size
+    nx: int = None,                         # Manual grid size X (if not estimating)
+    ny: int = None,                         # Manual grid size Y
+    nz: int = None,                         # Manual grid size Z
+    upsample_factor: float = 2.0,           # Grid upsampling factor
+    keep_fft_result: bool = True            # Keep FFT results in memory
+)
+```
+
+#### Process Map Parameters
+
+```python
+process_map(
+    # K-space mask parameters
+    n_centers: int = 3,           # Number of spherical masks
+    radius: float = 0.5,          # Mask radius (0 to 1)
+    random_seed: int = None,      # Seed for random mask centers
+    
+    # Analysis parameters
+    analyses_to_run: List[str] = [
+        'magnitude',              # Basic magnitude analysis
+        'phase',                  # Phase analysis
+        'local_variance',         # Local spatial variance
+        'temporal_diff',          # Temporal differences
+        'spectral_slope',         # Spectral slope (enhanced)
+        'spectral_entropy',       # Spectral entropy (enhanced)
+        'anisotropy'             # Spatial anisotropy (enhanced)
+    ],
+    
+    # Additional parameters
+    k_neighbors_local_var: int = 5,  # k for local variance
+    save_format: str = 'hdf5'        # Output format
+)
+```
+
+### Scale Examples
+
+The package has been tested with various data scales:
+
+1. **Small Scale** (~2MB total output)
+```python
+n_points = 1000
+n_times = 5
+# Processing time: ~1-2 seconds
+```
+
+2. **Medium Scale** (~18MB total output)
+```python
+n_points = 5000
+n_times = 10
+# Processing time: ~5-10 seconds
+```
+
+3. **Large Scale** (~1.7GB total output)
+```python
+n_points = 50000
+n_times = 100
+# Processing time: ~88 seconds
+```
+
+4. **Extra Large Scale** (~6.6GB total output)
+```python
+n_points = 100000
+n_times = 200
+# Processing time: ~24 minutes
+```
+
+### Output Structure
+
+The pipeline generates three HDF5 files in the output directory:
+
+1. `data.h5`: Raw computational results
+   - Forward FFT results
+   - K-space masks
+   - Inverse maps
+   - Gradient maps
+
+2. `analysis.h5`: Analysis results
+   - Magnitude and phase calculations
+   - Local variance metrics
+   - Temporal difference calculations
+   - Analysis summary group
+
+3. `enhanced.h5`: Enhanced feature results (if enabled)
+   - Spectral metrics (slope, entropy)
+   - Analytical gradient maps
+   - Higher-order moments
+   - Excitation maps
+
+### Memory Requirements
+
+Memory usage scales with data size:
+- Small scale (1K points, 5 times): ~100MB RAM
+- Medium scale (5K points, 10 times): ~500MB RAM
+- Large scale (50K points, 100 times): ~4GB RAM
+- Extra large scale (100K points, 200 times): ~16GB RAM
+
+### Storage Requirements
+
+Output file sizes vary with data scale:
+- Small scale: ~2MB total
+- Medium scale: ~18MB total
+- Large scale: ~1.7GB total
+- Extra large scale: ~6.6GB total
+
+### Performance Tips
+
+1. **Memory Optimization**
+   - Use `dtype='complex64'` for smaller memory footprint
+   - Set `keep_fft_result=False` if memory limited
+   - Enable HDF5 compression for storage efficiency
+
+2. **Computation Speed**
+   - Use analytical gradient method for faster processing
+   - Adjust `eps` parameter for precision vs. speed
+   - Consider parallel processing for multiple subjects
+
+3. **Storage Efficiency**
+   - Use HDF5 compression (enabled by default)
+   - Clean up intermediate results if not needed
+   - Monitor disk space for large datasets
+
+## Normalization Functions
+
+The package provides several normalization methods for preprocessing your data before FFT analysis.
+
+### Basic Usage
+
+```python
+from QM_FFT_Analysis.utils.preprocessing import (
+    get_normalized_wavefunctions_at_times,
+    normalize_time_series,
+    normalize_complex_data
+)
+
+# 1. Time Series Normalization
+time_series_data = np.random.randn(n_sources, n_time_points)
+normalized_data = normalize_time_series(
+    time_series=time_series_data,
+    time_axis=1,
+    method='zscore'  # Options: 'zscore', 'minmax', 'robust'
+)
+
+# 2. Complex Data Normalization
+complex_data = np.random.randn(n_points) + 1j * np.random.randn(n_points)
+normalized_complex = normalize_complex_data(
+    data=complex_data,
+    method='unit_power',  # Options: 'unit_power', 'unit_magnitude'
+    preserve_phase=True
+)
+
+# 3. Wavefunction Normalization (Multiple Time Points)
+normalized_wavefunctions = get_normalized_wavefunctions_at_times(
+    time_series_data=time_series_data,
+    time_indices=[50, 100, 150],  # Specific time points to analyze
+    time_axis=1,
+    source_axis=0,
+    normalization_method='zscore',
+    complex_normalization='unit_power'
+)
+```
+
+### Available Normalization Methods
+
+#### 1. Time Series Normalization
+```python
+def normalize_time_series(
+    time_series: np.ndarray,
+    time_axis: int = 1,
+    method: str = 'zscore',
+    robust: bool = False,
+    eps: float = 1e-10
+) -> np.ndarray:
+    """
+    Normalize time series data.
+    
+    Parameters:
+    -----------
+    time_series : array-like
+        Input time series data (n_sources × n_time_points)
+    time_axis : int
+        Axis corresponding to time dimension
+    method : str
+        'zscore': (x - mean) / std
+        'minmax': (x - min) / (max - min)
+        'robust': (x - median) / IQR
+    robust : bool
+        Use robust statistics (median/IQR instead of mean/std)
+    eps : float
+        Small constant to avoid division by zero
+        
+    Returns:
+    --------
+    normalized_data : np.ndarray
+        Normalized time series data
+    """
+```
+
+#### 2. Complex Data Normalization
+```python
+def normalize_complex_data(
+    data: np.ndarray,
+    method: str = 'unit_power',
+    preserve_phase: bool = True,
+    eps: float = 1e-10
+) -> np.ndarray:
+    """
+    Normalize complex-valued data.
+    
+    Parameters:
+    -----------
+    data : array-like
+        Complex input data
+    method : str
+        'unit_power': normalize to unit power
+        'unit_magnitude': normalize to unit magnitude
+    preserve_phase : bool
+        Whether to preserve phase information
+    eps : float
+        Small constant to avoid division by zero
+        
+    Returns:
+    --------
+    normalized_data : np.ndarray
+        Normalized complex data
+    """
+```
+
+#### 3. Wavefunction Normalization
+```python
+def get_normalized_wavefunctions_at_times(
+    time_series_data: np.ndarray,
+    time_indices: List[int],
+    time_axis: int = 1,
+    source_axis: int = 0,
+    normalization_method: str = 'zscore',
+    complex_normalization: str = 'unit_power'
+) -> np.ndarray:
+    """
+    Extract and normalize data at specific time points.
+    
+    Parameters:
+    -----------
+    time_series_data : array-like
+        Input time series data
+    time_indices : list of int
+        Time points to extract
+    time_axis : int
+        Axis corresponding to time
+    source_axis : int
+        Axis corresponding to sources
+    normalization_method : str
+        Method for time series normalization
+    complex_normalization : str
+        Method for complex data normalization
+        
+    Returns:
+    --------
+    normalized_wavefunctions : np.ndarray
+        Normalized data for selected time points
+    """
+```
+
+### Example Pipeline with Normalization
+
+```python
+import numpy as np
+from QM_FFT_Analysis.utils.preprocessing import get_normalized_wavefunctions_at_times
+from QM_FFT_Analysis.utils.map_builder import MapBuilder
+
+# 1. Generate or load your time series data
+n_sources = 50000
+n_time = 1000
+time_series_data = np.random.randn(n_sources, n_time)
+
+# 2. Select time points and normalize
+time_indices = np.linspace(0, n_time-1, 100, dtype=int)  # 100 evenly spaced points
+normalized_data = get_normalized_wavefunctions_at_times(
+    time_series_data=time_series_data,
+    time_indices=time_indices,
+    time_axis=1,
+    source_axis=0,
+    normalization_method='zscore',
+    complex_normalization='unit_power'
+)
+
+# 3. Initialize and run MapBuilder
+map_builder = MapBuilder(
+    subject_id='example',
+    output_dir='/path/to/output',
+    x=x_coordinates,
+    y=y_coordinates,
+    z=z_coordinates,
+    strengths=normalized_data,  # Already normalized
+    normalize_fft_result=True   # Additional FFT normalization
+)
+
+# 4. Run analysis
+map_builder.process_map(
+    n_centers=3,
+    radius=0.5,
+    analyses_to_run=['magnitude', 'phase', 'spectral_slope']
+)
+```
+
+### Normalization Best Practices
+
+1. **Time Series Data**
+   - Use 'zscore' for normally distributed data
+   - Use 'robust' for data with outliers
+   - Use 'minmax' when absolute scale is important
+
+2. **Complex Data**
+   - Use 'unit_power' for spectral analysis
+   - Use 'unit_magnitude' when only phase is important
+   - Set preserve_phase=True to maintain phase information
+
+3. **Pipeline Integration**
+   - Normalize time series before complex conversion
+   - Consider data distribution when choosing methods
+   - Monitor normalization effects on final results
+
+4. **Performance Considerations**
+   - Normalize in batches for large datasets
+   - Use float32 for memory efficiency
+   - Cache normalized results for repeated analyses
