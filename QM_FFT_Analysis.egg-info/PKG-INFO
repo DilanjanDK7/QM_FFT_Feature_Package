@@ -1,3 +1,39 @@
+Metadata-Version: 2.4
+Name: QM_FFT_Analysis
+Version: 0.1.0
+Summary: A package for analyzing quantum mechanics data using FFT and map building techniques.
+Home-page: https://github.com/yourusername/QM_FFT_Analysis
+Author: Dilanjan DK
+Author-email: Dilanjan DK <ddiyabal@uwo.ca>
+Project-URL: Homepage, https://github.com/yourusername/QM_FFT_Analysis
+Project-URL: Bug Tracker, https://github.com/yourusername/QM_FFT_Analysis/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Physics
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy>=1.20
+Requires-Dist: scipy>=1.7
+Requires-Dist: finufft>=2.2
+Requires-Dist: tqdm>=4.60
+Requires-Dist: plotly>=5.0
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: viz
+Requires-Dist: plotly>=5.0; extra == "viz"
+Requires-Dist: matplotlib>=3.5; extra == "viz"
+Provides-Extra: test
+Requires-Dist: pytest>=7.0; extra == "test"
+Provides-Extra: enhanced
+Requires-Dist: pyyaml>=6.0; extra == "enhanced"
+Requires-Dist: matplotlib>=3.5; extra == "enhanced"
+Dynamic: author
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-python
+
 # QM FFT Analysis Package
 
 This package provides tools for analyzing 3D data, potentially representing quantum mechanical properties or other spatial fields, using Non-Uniform Fast Fourier Transforms (NUFFT) via the FINUFFT library.

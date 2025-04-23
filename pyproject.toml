@@ -33,6 +33,7 @@ dependencies = [
     "finufft>=2.2", # Check actual required version
     "tqdm>=4.60",
     "plotly>=5.0", # If visualizations are part of the core package
+    "pyyaml>=6.0", # For configuration files (enhanced features)
 ]
 
 [project.optional-dependencies]
@@ -43,6 +44,10 @@ viz = [
 test = [
     "pytest>=7.0",
     # Add other test dependencies here if needed
+]
+enhanced = [
+    "pyyaml>=6.0", # For configuration files
+    "matplotlib>=3.5", # For visualization of enhanced features
 ]
 
 [project.urls]

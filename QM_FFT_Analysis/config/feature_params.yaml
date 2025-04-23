@@ -1,0 +1,15 @@
+# Configuration file for QM_FFT_Analysis enhanced features
+
+# Gradient computation
+gradient_weighting: true  # Use analytic gradient method
+
+# K-space metrics
+slope_fit_range: [0.1, 0.8]  # Fraction of max k for power-law fitting
+entropy_bin_count: 64  # Number of bins for entropy calculation
+anisotropy_moment: 2  # Moment order for anisotropy tensor
+
+# Higher-order moments
+moments_order: [3, 4]  # Orders to compute: 3=skewness, 4=kurtosis
+
+# HRF deconvolution
+hrf_kernel: "canonical"  # Type of HRF kernel to use for deconvolution 

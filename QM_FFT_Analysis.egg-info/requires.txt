@@ -1,0 +1,17 @@
+numpy>=1.20
+scipy>=1.7
+finufft>=2.2
+tqdm>=4.60
+plotly>=5.0
+pyyaml>=6.0
+
+[enhanced]
+pyyaml>=6.0
+matplotlib>=3.5
+
+[test]
+pytest>=7.0
+
+[viz]
+plotly>=5.0
+matplotlib>=3.5

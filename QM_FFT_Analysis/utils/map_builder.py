@@ -13,12 +13,24 @@ from .map_analysis import (
     calculate_local_variance, calculate_temporal_difference
 )
 
+# Import the enhanced features module conditionally
+try:
+    from .enhanced_features import (
+        load_config, compute_radial_gradient, calculate_spectral_slope,
+        calculate_spectral_entropy, calculate_kspace_anisotropy,
+        calculate_higher_order_moments, calculate_excitation_map
+    )
+    _ENHANCED_FEATURES_AVAILABLE = True
+except ImportError:
+    _ENHANCED_FEATURES_AVAILABLE = False
+
 class MapBuilder:
     """Class for building and analyzing 3D maps using FINUFFT, supporting multiple transforms (n_trans)."""
 
     def __init__(self, subject_id, output_dir, x, y, z, strengths, 
                  nx=None, ny=None, nz=None, eps=1e-6, upsampling_factor=2, dtype='complex128', estimate_grid=True,
-                 normalize_fft_result=False, padding=0, stride=1):
+                 normalize_fft_result=False, padding=0, stride=1, enable_enhanced_features=False, 
+                 config_path=None):
         """Initialize MapBuilder.
 
         Args:
@@ -40,6 +52,8 @@ class MapBuilder:
             normalize_fft_result (bool, optional): Normalize FFT power spectrum. Defaults to False.
             padding (int, optional): [Deprecated/Test Compatibility] Padding factor. Defaults to 0.
             stride (int, optional): Stride for k-space sampling. Defaults to 1.
+            enable_enhanced_features (bool, optional): Enable enhanced features. Defaults to False.
+            config_path (str or Path, optional): Path to custom configuration file for enhanced features.
         """
         # Input validation
         if not subject_id:
@@ -67,14 +81,29 @@ class MapBuilder:
         self.upsampling_factor = upsampling_factor # Assign upsampling factor early
         # --- End early assignments ---
 
+        # Enhanced features settings
+        self.enable_enhanced_features = enable_enhanced_features
+        if enable_enhanced_features:
+            if not _ENHANCED_FEATURES_AVAILABLE:
+                self.logger.warning("Enhanced features requested but module not available. Disabling enhanced features.")
+                self.enable_enhanced_features = False
+            else:
+                self.config = load_config(config_path)
+                self.logger.info("Enhanced features enabled with configuration")
+                
         # Create output directories
         self.subject_dir = self.output_dir / subject_id
         self.plots_dir = self.subject_dir / "plots"
         self.data_dir = self.subject_dir / "data"
         self.analysis_dir = self.output_dir / self.subject_id / 'analysis'
+        self.enhanced_dir = self.output_dir / self.subject_id / 'enhanced'  # New directory for enhanced features
 
         for directory in [self.subject_dir, self.plots_dir, self.data_dir, self.analysis_dir]:
             directory.mkdir(parents=True, exist_ok=True)
+            
+        if self.enable_enhanced_features:
+            self.enhanced_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.info(f"Enhanced features directory created: {self.enhanced_dir}")
 
         self.logger.info(f"Output directories created/verified for subject: {subject_id}")
         self.logger.info(f"Data directory: {self.data_dir}")
@@ -165,8 +194,16 @@ class MapBuilder:
         self.inverse_maps = []
         self.gradient_maps = []
         self.analysis_results = {}
+        
+        # Enhanced features storage - only initialize if enabled
+        if self.enable_enhanced_features:
+            self.enhanced_results = {}
+            self.analytical_gradient_maps = []
 
         self.logger.info("MapBuilder initialized successfully")
+        
+        if self.enable_enhanced_features:
+            self.logger.info("Enhanced features are enabled")
 
     def _setup_logging(self, subject_id):
         """Set up logging configuration."""
@@ -448,46 +485,64 @@ class MapBuilder:
 
         self.logger.info(f"Computed inverse maps for {len(self.inverse_maps)} masks, each with {self.n_trans} transforms.")
 
-    def compute_gradient_maps(self):
-        """Compute gradient maps by interpolating inverse maps onto a grid."""
+    def compute_gradient_maps(self, use_analytical_method=None):
+        """
+        Compute gradient maps by interpolating inverse maps onto a grid.
+        
+        If enhanced features are enabled and use_analytical_method is True or None,
+        the analytical gradient method will be used, which is faster and more accurate.
+        
+        Args:
+            use_analytical_method (bool, optional): Whether to use the analytical gradient method.
+                If None, uses the value from config if enhanced features are enabled.
+        """
+        # Determine if we should use the analytical method
+        if use_analytical_method is None and self.enable_enhanced_features:
+            use_analytical_method = self.config.get("gradient_weighting", False)
+        elif use_analytical_method and not self.enable_enhanced_features:
+            self.logger.warning("Analytical gradient method requested but enhanced features are not enabled. Using interpolation method.")
+            # Raise an exception for backwards compatibility testing
+            raise RuntimeError("Analytical gradient method requires enhanced features to be enabled")
+        
+        if use_analytical_method and self.enable_enhanced_features and _ENHANCED_FEATURES_AVAILABLE:
+            self.logger.info("Computing gradient maps using analytical method (enhanced feature).")
+            return self._compute_analytical_gradient_maps()
+        
+        # Legacy interpolation-based method
         if not self.inverse_maps:
-            self.logger.error("No inverse maps computed yet")
-            raise ValueError("Inverse maps must be computed before gradient maps")
+            self.logger.error("No inverse maps computed yet. Cannot compute gradient maps.")
+            return
 
         self.gradient_maps = []
+        self.logger.info(f"Computing gradient maps for {len(self.inverse_maps)} inverse maps using interpolation.")
 
         # Define source points (non-uniform)
         points_nu = np.stack((self.x_coords_1d, self.y_coords_1d, self.z_coords_1d), axis=-1)
 
         # Define target grid points (uniform)
-        grid_x, grid_y, grid_z = np.meshgrid(
-            np.linspace(self.x_coords_1d.min(), self.x_coords_1d.max(), self.nx),
-            np.linspace(self.y_coords_1d.min(), self.y_coords_1d.max(), self.ny),
-            np.linspace(self.z_coords_1d.min(), self.z_coords_1d.max(), self.nz),
-            indexing='ij'
-        )
+        grid_x = np.linspace(self.x_coords_1d.min(), self.x_coords_1d.max(), self.nx)
+        grid_y = np.linspace(self.y_coords_1d.min(), self.y_coords_1d.max(), self.ny)
+        grid_z = np.linspace(self.z_coords_1d.min(), self.z_coords_1d.max(), self.nz)
+        
+        grid_x, grid_y, grid_z = np.meshgrid(grid_x, grid_y, grid_z, indexing='ij')
         points_u = np.stack((grid_x.ravel(), grid_y.ravel(), grid_z.ravel()), axis=-1)
         
         for i, inverse_map_nu in enumerate(self.inverse_maps):
-            # inverse_map_nu shape is (n_trans, n_points)
             interpolated_maps_grid = np.zeros((self.n_trans, self.nx, self.ny, self.nz), dtype=self.dtype)
 
             for t in range(self.n_trans):
-                # Interpolate data for this transform onto the uniform grid
-                # Using linear interpolation. Fill points outside convex hull with the mean value.
-                fill_val = np.mean(inverse_map_nu[t]) # Calculate mean for fill value
+                # Default fill value (could be set to 0 or mean or other strategy)
+                fill_val = np.mean(inverse_map_nu[t])
                 interpolated_data_flat = griddata(
                     points_nu, 
-                    inverse_map_nu[t], # Values at non-uniform points for transform t
+                    inverse_map_nu[t],
                     points_u, 
                     method='linear',
-                    fill_value=fill_val # Use mean as fill value
+                    fill_value=fill_val
                 )
                 interpolated_maps_grid[t] = interpolated_data_flat.reshape(self.nx, self.ny, self.nz)
-                self.logger.debug(f"Interpolated inverse map {i}, transform {t} onto grid.")
 
-            # Gradients calculated independently for each transform along spatial axes
-            # using the interpolated grid data
+            # Calculate gradients
             try:
                 dz, dy, dx = np.gradient(interpolated_maps_grid, axis=(1, 2, 3))
                 gradient_magnitude = np.sqrt(np.abs(dx)**2 + np.abs(dy)**2 + np.abs(dz)**2) # Shape (n_trans, nx, ny, nz)
@@ -503,48 +558,343 @@ class MapBuilder:
 
         self.logger.info(f"Computed gradient maps for {len(self.gradient_maps)} maps, each with {self.n_trans} transforms, using interpolation.")
 
-    def generate_volume_plot(self, data, filename, opacity=0.5, surface_count=10, colormap="viridis"):
-        """Generate interactive 3D volume plot."""
-        # Check if data is 3D
-        if data.ndim != 3:
-            self.logger.error(f"generate_volume_plot requires 3D data, but got shape {data.shape}. Plotting skipped.")
+    def _compute_analytical_gradient_maps(self):
+        """
+        Compute gradient maps analytically in k-space using enhanced features.
+        
+        This is more efficient than the interpolation-based method as it requires only
+        one inverse transform per mask instead of first computing inverse maps and then gradients.
+        """
+        if self.fft_result is None:
+            self.logger.error("Forward FFT must be computed before analytical gradient maps.")
+            raise RuntimeError("Forward FFT must be computed before analytical gradient maps.")
+            
+        if not hasattr(self, 'kspace_masks') or not self.kspace_masks:
+            self.logger.warning("No k-space masks generated yet. Generating default masks.")
+            self.generate_kspace_masks()
+            
+        self.analytical_gradient_maps = []
+        self.logger.info(f"Computing analytical gradient maps for {len(self.kspace_masks)} masks")
+        
+        for i, mask in enumerate(self.kspace_masks):
+            # Apply 3D mask to 4D FFT result using broadcasting
+            masked_fft = self.fft_result * mask
+            
+            # Compute gradient analytically in k-space
+            gradient_fft = compute_radial_gradient(
+                masked_fft, self.kx, self.ky, self.kz, 
+                eps=self.eps, dtype=str(self.dtype)
+            )
+            
+            # Execute inverse transform for the gradient
+            gradient_map_flat = self.inverse_plan.execute(gradient_fft)
+            
+            # Reshape result to (n_trans, n_points)
+            gradient_map_nu = gradient_map_flat.reshape(self.n_trans, self.n_points)
+            gradient_magnitude_nu = np.abs(gradient_map_nu)
+            
+            # Save the analytical gradient results
+            np.save(self.enhanced_dir / f"analytical_gradient_map_{i}.npy", gradient_magnitude_nu)
+            
+            # Also store it in legacy format for backward compatibility
+            # This requires interpolation onto a uniform grid
+            points_nu = self.points_nu
+            grid_x = np.linspace(self.x_coords_1d.min(), self.x_coords_1d.max(), self.nx)
+            grid_y = np.linspace(self.y_coords_1d.min(), self.y_coords_1d.max(), self.ny)
+            grid_z = np.linspace(self.z_coords_1d.min(), self.z_coords_1d.max(), self.nz)
+            
+            X, Y, Z = np.meshgrid(grid_x, grid_y, grid_z, indexing='ij')
+            points_u = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+            
+            gradient_magnitude_grid = np.zeros((self.n_trans, self.nx, self.ny, self.nz), dtype=self.real_dtype)
+            
+            for t in range(self.n_trans):
+                fill_val = np.mean(gradient_magnitude_nu[t])
+                interpolated_data_flat = griddata(
+                    points_nu, 
+                    gradient_magnitude_nu[t],
+                    points_u, 
+                    method='linear',
+                    fill_value=fill_val
+                )
+                gradient_magnitude_grid[t] = interpolated_data_flat.reshape(self.nx, self.ny, self.nz)
+            
+            # Add to both collections for backwards compatibility
+            self.analytical_gradient_maps.append(gradient_magnitude_nu)
+            self.gradient_maps.append(gradient_magnitude_grid)
+            
+            # Save in the normal format too
+            np.save(self.data_dir / f"gradient_map_{i}.npy", gradient_magnitude_grid)
+            
+            self.logger.info(f"Analytical gradient map {i} computed and saved")
+            
+        self.logger.info(f"Computed analytical gradient maps for {len(self.kspace_masks)} masks")
+        return True
+
+    def compute_enhanced_metrics(self, metrics_to_run=None):
+        """
+        Compute enhanced spectral metrics from the FFT result.
+        
+        Args:
+            metrics_to_run (list, optional): List of metrics to compute. If None, computes all available metrics.
+                Options: 'spectral_slope', 'spectral_entropy', 'anisotropy', 'higher_moments', 'excitation'.
+                
+        Returns:
+            dict: Dictionary of computed metrics.
+        """
+        if not self.enable_enhanced_features:
+            self.logger.warning("Enhanced features are not enabled. Call with enable_enhanced_features=True during initialization.")
+            return {}
+            
+        if not _ENHANCED_FEATURES_AVAILABLE:
+            self.logger.error("Enhanced features module not available.")
+            return {}
+            
+        if self.fft_result is None:
+            self.logger.error("Forward FFT must be computed before enhanced metrics.")
+            raise RuntimeError("Forward FFT must be computed before enhanced metrics.")
+            
+        # Default metrics to run
+        if metrics_to_run is None:
+            metrics_to_run = ['spectral_slope', 'spectral_entropy', 'anisotropy', 'higher_moments']
+            # Only add excitation if we have enough time points
+            if self.n_trans >= 3:
+                metrics_to_run.append('excitation')
+                
+        self.logger.info(f"Computing enhanced metrics: {metrics_to_run}")
+        enhanced_results = {}
+        
+        # Spectral slope
+        if 'spectral_slope' in metrics_to_run:
+            k_min = self.config.get('slope_fit_range', [0.1, 0.8])[0]
+            k_max = self.config.get('slope_fit_range', [0.1, 0.8])[1]
+            
+            self.logger.info(f"Computing spectral slope with k_range: [{k_min}, {k_max}]")
+            spectral_slope = calculate_spectral_slope(
+                self.fft_result, self.kx, self.ky, self.kz, 
+                k_min=k_min, k_max=k_max
+            )
+            enhanced_results['spectral_slope'] = spectral_slope
+            np.save(self.enhanced_dir / "spectral_slope.npy", spectral_slope)
+            self.logger.info(f"Spectral slope computed: {spectral_slope}")
+            
+        # Spectral entropy
+        if 'spectral_entropy' in metrics_to_run:
+            nbins = self.config.get('entropy_bin_count', 64)
+            
+            self.logger.info(f"Computing spectral entropy with {nbins} bins")
+            spectral_entropy = calculate_spectral_entropy(
+                self.fft_result, self.kx, self.ky, self.kz, 
+                nbins=nbins
+            )
+            enhanced_results['spectral_entropy'] = spectral_entropy
+            np.save(self.enhanced_dir / "spectral_entropy.npy", spectral_entropy)
+            self.logger.info(f"Spectral entropy computed: {spectral_entropy}")
+            
+        # Anisotropy
+        if 'anisotropy' in metrics_to_run:
+            moment = self.config.get('anisotropy_moment', 2)
+            
+            self.logger.info(f"Computing k-space anisotropy with moment={moment}")
+            anisotropy = calculate_kspace_anisotropy(
+                self.fft_result, self.kx, self.ky, self.kz, 
+                moment=moment
+            )
+            enhanced_results['anisotropy'] = anisotropy
+            np.save(self.enhanced_dir / "anisotropy.npy", anisotropy)
+            self.logger.info(f"K-space anisotropy computed: {anisotropy}")
+            
+        # Higher-order moments
+        if 'higher_moments' in metrics_to_run and self.inverse_maps:
+            for i, inv_map_nu in enumerate(self.inverse_maps):
+                self.logger.info(f"Computing higher-order moments for inverse map {i}")
+                skewness, kurtosis = calculate_higher_order_moments(inv_map_nu)
+                
+                # Store in map-specific results
+                map_results = enhanced_results.get(f"map_{i}", {})
+                map_results['skewness'] = skewness
+                map_results['kurtosis'] = kurtosis
+                enhanced_results[f"map_{i}"] = map_results
+                
+                # Save to files
+                np.save(self.enhanced_dir / f"map_{i}_skewness.npy", skewness)
+                np.save(self.enhanced_dir / f"map_{i}_kurtosis.npy", kurtosis)
+                
+                self.logger.info(f"Higher-order moments computed for map {i}")
+                
+        # Excitation map (for time series data)
+        if 'excitation' in metrics_to_run and self.n_trans >= 3:
+            hrf_type = self.config.get('hrf_kernel', 'canonical')
+            
+            self.logger.info(f"Computing excitation map with HRF type: {hrf_type}")
+            excitation_map = calculate_excitation_map(
+                self.fft_result, time_axis=0, 
+                hrf_type=hrf_type
+            )
+            
+            if excitation_map is not None:
+                enhanced_results['excitation_map'] = excitation_map
+                np.save(self.enhanced_dir / "excitation_map.npy", excitation_map)
+                self.logger.info(f"Excitation map computed with shape: {excitation_map.shape}")
+            else:
+                self.logger.warning("Excitation map computation failed")
+        
+        # Store the enhanced results
+        self.enhanced_results = enhanced_results
+        
+        # Save all results to a single HDF5 file
+        summary_file_path = self.enhanced_dir / "enhanced_metrics.h5"
+        try:
+            with h5py.File(summary_file_path, 'w') as f:
+                self.logger.info(f"Saving enhanced metrics to HDF5 file: {summary_file_path}")
+                self._save_dict_to_hdf5(f, '', enhanced_results)
+                self.logger.info("Successfully saved enhanced metrics to HDF5.")
+        except Exception as e:
+            self.logger.error(f"Failed to save enhanced metrics to HDF5 file {summary_file_path}: {e}")
+            
+        return enhanced_results
+        
+    def analyze_inverse_maps(self, analyses_to_run=['magnitude', 'phase'], k_neighbors=5, save_format='hdf5', 
+                            compute_enhanced=None):
+        """Performs selected analyses on the computed non-uniform inverse maps.
+
+        Args:
+            analyses_to_run (list): A list of strings specifying which analyses to run.
+                                    Options: 'magnitude', 'phase', 'local_variance', 
+                                             'temporal_diff_magnitude', 'temporal_diff_phase'.
+                                             
+                                    Enhanced options (if enabled): 'spectral_slope', 'spectral_entropy',
+                                                                  'anisotropy', 'higher_moments', 'excitation'.
+            k_neighbors (int): Number of neighbors for local variance calculation.
+            save_format (str): Format to save the summary analysis results. 
+                               Options: 'hdf5' (default) saves a single HDF5 file,
+                                        'npz' logs that individual .npy files are saved and caller handles summary.
+            compute_enhanced (bool, optional): Whether to compute enhanced metrics.
+                                              If None, computes them if enhanced features are enabled.
+        """
+        if not self.inverse_maps:
+            self.logger.error("No inverse maps computed yet. Cannot run analysis.")
             return
 
-        # Ensure coordinates used for plotting match the grid dimensions
-        if self.x_coords_1d.size != data.size:
-             self.logger.warning(f"Number of plot coordinates ({self.x_coords_1d.size}) does not match data size ({data.size}). Using estimated grid coordinates for plot.")
-             plot_x = np.linspace(self.x_coords_1d.min(), self.x_coords_1d.max(), self.nx)
-             plot_y = np.linspace(self.y_coords_1d.min(), self.y_coords_1d.max(), self.ny)
-             plot_z = np.linspace(self.z_coords_1d.min(), self.z_coords_1d.max(), self.nz)
-             X, Y, Z = np.meshgrid(plot_x, plot_y, plot_z, indexing='ij')
+        self.logger.info(f"Starting analysis of {len(self.inverse_maps)} inverse maps. Analyses requested: {analyses_to_run}")
+        self.analysis_results = {} # Clear previous results
+        
+        # Split standard and enhanced analyses
+        standard_analyses = []
+        enhanced_analyses = []
+        
+        for analysis in analyses_to_run:
+            if analysis in ['magnitude', 'phase', 'local_variance', 'temporal_diff_magnitude', 'temporal_diff_phase']:
+                standard_analyses.append(analysis)
+            elif analysis in ['spectral_slope', 'spectral_entropy', 'anisotropy', 'higher_moments', 'excitation']:
+                enhanced_analyses.append(analysis)
+        
+        # Run standard analyses
+        for i, inv_map_nu in enumerate(self.inverse_maps):
+            analysis_set = {} # Store results for this specific inverse map
+            map_name_base = f"map_{i}"
+
+            # --- Simple Analyses (Magnitude, Phase) --- 
+            if 'magnitude' in standard_analyses:
+                magnitude = calculate_magnitude(inv_map_nu)
+                analysis_set['magnitude'] = magnitude
+                np.save(self.analysis_dir / f"{map_name_base}_magnitude.npy", magnitude)
+                self.logger.debug(f"Computed and saved magnitude for {map_name_base}")
+            
+            if 'phase' in standard_analyses:
+                phase = calculate_phase(inv_map_nu)
+                analysis_set['phase'] = phase
+                np.save(self.analysis_dir / f"{map_name_base}_phase.npy", phase)
+                self.logger.debug(f"Computed and saved phase for {map_name_base}")
+
+            # --- Local Variance --- 
+            if 'local_variance' in standard_analyses:
+                local_var = calculate_local_variance(inv_map_nu, self.points_nu, k=k_neighbors)
+                analysis_set['local_variance'] = local_var
+                np.save(self.analysis_dir / f"{map_name_base}_local_variance_k{k_neighbors}.npy", local_var)
+                self.logger.debug(f"Computed and saved local variance (k={k_neighbors}) for {map_name_base}")
+
+            # --- Temporal Differences --- 
+            # Temporal diff requires magnitude/phase to be calculated first if not already done
+            temp_magnitude = analysis_set.get('magnitude')
+            if 'temporal_diff_magnitude' in standard_analyses:
+                if temp_magnitude is None:
+                     temp_magnitude = calculate_magnitude(inv_map_nu) # Calculate if needed
+                
+                td_mag = calculate_temporal_difference(temp_magnitude)
+                if td_mag is not None:
+                    analysis_set['temporal_diff_magnitude'] = td_mag
+                    np.save(self.analysis_dir / f"{map_name_base}_temporal_diff_magnitude.npy", td_mag)
+                    self.logger.debug(f"Computed and saved temporal difference (magnitude) for {map_name_base}")
+                else:
+                    self.logger.warning(f"Skipping temporal difference (magnitude) for {map_name_base} - requires n_trans >= 2.")
+
+            temp_phase = analysis_set.get('phase')
+            if 'temporal_diff_phase' in standard_analyses:
+                if temp_phase is None:
+                     temp_phase = calculate_phase(inv_map_nu) # Calculate if needed
+
+                td_phase = calculate_temporal_difference(temp_phase)
+                if td_phase is not None:
+                    analysis_set['temporal_diff_phase'] = td_phase
+                    np.save(self.analysis_dir / f"{map_name_base}_temporal_diff_phase.npy", td_phase)
+                    self.logger.debug(f"Computed and saved temporal difference (phase) for {map_name_base}")
+                else:
+                    self.logger.warning(f"Skipping temporal difference (phase) for {map_name_base} - requires n_trans >= 2.")
+            
+            # Store results for this map
+            self.analysis_results[map_name_base] = analysis_set
+            self.logger.debug(f"Completed analysis for map {i}") # Now inside loop
+
+        self.logger.info(f"Completed standard analysis calculation for {len(self.analysis_results)} maps.")
+        
+        # Run enhanced analyses if requested
+        if enhanced_analyses and self.enable_enhanced_features and _ENHANCED_FEATURES_AVAILABLE:
+            if compute_enhanced is None or compute_enhanced:
+                self.logger.info(f"Computing enhanced metrics: {enhanced_analyses}")
+                self.compute_enhanced_metrics(metrics_to_run=enhanced_analyses)
+        elif enhanced_analyses and not (self.enable_enhanced_features and _ENHANCED_FEATURES_AVAILABLE):
+            self.logger.warning(f"Enhanced analyses requested but enhanced features not enabled or available: {enhanced_analyses}")
+
+        # Save the summary analysis_results dictionary based on save_format
+        if save_format == 'hdf5':
+            summary_file_path = self.analysis_dir / "analysis_summary.h5"
+            try:
+                with h5py.File(summary_file_path, 'w') as f:
+                    self.logger.info(f"Saving analysis results dictionary to HDF5 file: {summary_file_path}")
+                    self._save_dict_to_hdf5(f, '', self.analysis_results)
+                    self.logger.info("Successfully saved analysis results to HDF5.")
+            except Exception as e:
+                self.logger.error(f"Failed to save analysis results to HDF5 file {summary_file_path}: {e}")
+        elif save_format == 'npz':
+            self.logger.info("Individual analysis results saved as .npy files. Caller is responsible for creating a summary .npz file if needed.")
         else:
-             # Assuming data corresponds to the grid derived from original points
-             X = self.x_coords_1d.reshape(self.nx, self.ny, self.nz)
-             Y = self.y_coords_1d.reshape(self.nx, self.ny, self.nz)
-             Z = self.z_coords_1d.reshape(self.nx, self.ny, self.nz)
+            self.logger.warning(f"Unsupported save_format '{save_format}'. No summary file generated. Individual .npy files were still saved.")
 
-        fig = go.Figure(data=go.Volume(
-            x=X.flatten(),
-            y=Y.flatten(),
-            z=Z.flatten(),
-            value=np.abs(data.flatten()), # Plot magnitude
-            opacity=opacity,
-            surface_count=surface_count,
-            colorscale=colormap
-        ))
+    def process_map(self, n_centers=2, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5,
+                  use_analytical_gradient=None):
+        """Run the main processing steps: FFT, masks, inverse, gradients, and analysis.
+        
+        Args:
+            n_centers (int, optional): Number of spherical mask centers. Defaults to 2.
+            radius (float, optional): Radius of spherical masks. Defaults to 0.5.
+            analyses_to_run (list, optional): Analyses to run. Defaults to ['magnitude'].
+            k_neighbors_local_var (int, optional): k for local variance. Defaults to 5.
+            use_analytical_gradient (bool, optional): Whether to use analytical gradient.
+                If None, uses the value from config if enhanced features enabled.
+        """
+        self.compute_forward_fft()
+        self.generate_kspace_masks(n_centers=n_centers, radius=radius)
+        self.compute_inverse_maps()
+        self.compute_gradient_maps(use_analytical_method=use_analytical_gradient)
+        
+        # Determine if any enhanced metrics are requested
+        enhanced_requested = any(a in ['spectral_slope', 'spectral_entropy', 'anisotropy', 
+                                       'higher_moments', 'excitation'] for a in analyses_to_run)
+                                       
+        self.analyze_inverse_maps(analyses_to_run=analyses_to_run, k_neighbors=k_neighbors_local_var)
 
-        fig.update_layout(title=filename,
-            scene=dict(
-                xaxis_title='X',
-                yaxis_title='Y',
-                zaxis_title='Z'
-            )
-        )
-
-        # Save plot to HTML file
-        plot_path = self.plots_dir / filename
-        fig.write_html(str(plot_path))
-        self.logger.info(f"Saved volume plot: {plot_path}")
+        self.logger.info("Map processing pipeline complete.")
 
     def _save_dict_to_hdf5(self, hdf5_file, path, dictionary):
         """Recursively saves dictionary contents to an HDF5 file.
@@ -588,104 +938,45 @@ class MapBuilder:
                      hdf5_file.create_dataset(current_path, data=item)
             # else: skip None values
 
-    def analyze_inverse_maps(self, analyses_to_run=['magnitude', 'phase'], k_neighbors=5, save_format='hdf5'):
-        """Performs selected analyses on the computed non-uniform inverse maps.
-
-        Args:
-            analyses_to_run (list): A list of strings specifying which analyses to run.
-                                    Options: 'magnitude', 'phase', 'local_variance', 
-                                             'temporal_diff_magnitude', 'temporal_diff_phase'.
-            k_neighbors (int): Number of neighbors for local variance calculation.
-            save_format (str): Format to save the summary analysis results. 
-                               Options: 'hdf5' (default) saves a single HDF5 file,
-                                        'npz' logs that individual .npy files are saved and caller handles summary.
-        """
-        if not self.inverse_maps:
-            self.logger.error("No inverse maps computed yet. Cannot run analysis.")
+    def generate_volume_plot(self, data, filename, opacity=0.5, surface_count=10, colormap="viridis"):
+        """Generate interactive 3D volume plot."""
+        # Check if data is 3D
+        if data.ndim != 3:
+            self.logger.error(f"generate_volume_plot requires 3D data, but got shape {data.shape}. Plotting skipped.")
             return
 
-        self.logger.info(f"Starting analysis of {len(self.inverse_maps)} inverse maps. Analyses requested: {analyses_to_run}")
-        self.analysis_results = {} # Clear previous results
-
-        for i, inv_map_nu in enumerate(self.inverse_maps):
-            analysis_set = {} # Store results for this specific inverse map
-            map_name_base = f"map_{i}"
-
-            # --- Simple Analyses (Magnitude, Phase) --- 
-            if 'magnitude' in analyses_to_run:
-                magnitude = calculate_magnitude(inv_map_nu)
-                analysis_set['magnitude'] = magnitude
-                np.save(self.analysis_dir / f"{map_name_base}_magnitude.npy", magnitude)
-                self.logger.debug(f"Computed and saved magnitude for {map_name_base}")
-            
-            if 'phase' in analyses_to_run:
-                phase = calculate_phase(inv_map_nu)
-                analysis_set['phase'] = phase
-                np.save(self.analysis_dir / f"{map_name_base}_phase.npy", phase)
-                self.logger.debug(f"Computed and saved phase for {map_name_base}")
-
-            # --- Local Variance --- 
-            if 'local_variance' in analyses_to_run:
-                local_var = calculate_local_variance(inv_map_nu, self.points_nu, k=k_neighbors)
-                analysis_set['local_variance'] = local_var
-                np.save(self.analysis_dir / f"{map_name_base}_local_variance_k{k_neighbors}.npy", local_var)
-                self.logger.debug(f"Computed and saved local variance (k={k_neighbors}) for {map_name_base}")
-
-            # --- Temporal Differences --- 
-            # Temporal diff requires magnitude/phase to be calculated first if not already done
-            temp_magnitude = analysis_set.get('magnitude')
-            if 'temporal_diff_magnitude' in analyses_to_run:
-                if temp_magnitude is None:
-                     temp_magnitude = calculate_magnitude(inv_map_nu) # Calculate if needed
-                
-                td_mag = calculate_temporal_difference(temp_magnitude)
-                if td_mag is not None:
-                    analysis_set['temporal_diff_magnitude'] = td_mag
-                    np.save(self.analysis_dir / f"{map_name_base}_temporal_diff_magnitude.npy", td_mag)
-                    self.logger.debug(f"Computed and saved temporal difference (magnitude) for {map_name_base}")
-                else:
-                    self.logger.warning(f"Skipping temporal difference (magnitude) for {map_name_base} - requires n_trans >= 2.")
-
-            temp_phase = analysis_set.get('phase')
-            if 'temporal_diff_phase' in analyses_to_run:
-                if temp_phase is None:
-                     temp_phase = calculate_phase(inv_map_nu) # Calculate if needed
-
-                td_phase = calculate_temporal_difference(temp_phase)
-                if td_phase is not None:
-                    analysis_set['temporal_diff_phase'] = td_phase
-                    np.save(self.analysis_dir / f"{map_name_base}_temporal_diff_phase.npy", td_phase)
-                    self.logger.debug(f"Computed and saved temporal difference (phase) for {map_name_base}")
-                else:
-                    self.logger.warning(f"Skipping temporal difference (phase) for {map_name_base} - requires n_trans >= 2.")
-            
-            # Store results for this map
-            self.analysis_results[map_name_base] = analysis_set
-            self.logger.debug(f"Completed analysis for map {i}") # Now inside loop
-
-        self.logger.info(f"Completed analysis calculation for {len(self.analysis_results)} maps.")
-
-        # Save the summary analysis_results dictionary based on save_format
-        if save_format == 'hdf5':
-            summary_file_path = self.analysis_dir / "analysis_summary.h5"
-            try:
-                with h5py.File(summary_file_path, 'w') as f:
-                    self.logger.info(f"Saving analysis results dictionary to HDF5 file: {summary_file_path}")
-                    self._save_dict_to_hdf5(f, '', self.analysis_results)
-                    self.logger.info("Successfully saved analysis results to HDF5.")
-            except Exception as e:
-                self.logger.error(f"Failed to save analysis results to HDF5 file {summary_file_path}: {e}")
-        elif save_format == 'npz':
-            self.logger.info("Individual analysis results saved as .npy files. Caller is responsible for creating a summary .npz file if needed.")
+        # Ensure coordinates used for plotting match the grid dimensions
+        if self.x_coords_1d.size != data.size:
+             self.logger.warning(f"Number of plot coordinates ({self.x_coords_1d.size}) does not match data size ({data.size}). Using estimated grid coordinates for plot.")
+             plot_x = np.linspace(self.x_coords_1d.min(), self.x_coords_1d.max(), self.nx)
+             plot_y = np.linspace(self.y_coords_1d.min(), self.y_coords_1d.max(), self.ny)
+             plot_z = np.linspace(self.z_coords_1d.min(), self.z_coords_1d.max(), self.nz)
+             X, Y, Z = np.meshgrid(plot_x, plot_y, plot_z, indexing='ij')
         else:
-            self.logger.warning(f"Unsupported save_format '{save_format}'. No summary file generated. Individual .npy files were still saved.")
+             # Assuming data corresponds to the grid derived from original points
+             X = self.x_coords_1d.reshape(self.nx, self.ny, self.nz)
+             Y = self.y_coords_1d.reshape(self.nx, self.ny, self.nz)
+             Z = self.z_coords_1d.reshape(self.nx, self.ny, self.nz)
 
-    def process_map(self, n_centers=2, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5):
-        """Run the main processing steps: FFT, masks, inverse, gradients, and analysis."""
-        self.compute_forward_fft()
-        self.generate_kspace_masks(n_centers=n_centers, radius=radius)
-        self.compute_inverse_maps()
-        self.compute_gradient_maps() # Gradient maps (interpolated)
-        self.analyze_inverse_maps(analyses_to_run=analyses_to_run, k_neighbors=k_neighbors_local_var) # Run specified analyses
+        fig = go.Figure(data=go.Volume(
+            x=X.flatten(),
+            y=Y.flatten(),
+            z=Z.flatten(),
+            value=np.abs(data.flatten()), # Plot magnitude
+            opacity=opacity,
+            surface_count=surface_count,
+            colorscale=colormap
+        ))
 
-        self.logger.info("Map processing pipeline complete.") 
+        fig.update_layout(title=filename,
+            scene=dict(
+                xaxis_title='X',
+                yaxis_title='Y',
+                zaxis_title='Z'
+            )
+        )
+
+        # Save plot to HTML file
+        plot_path = self.plots_dir / filename
+        fig.write_html(str(plot_path))
+        self.logger.info(f"Saved volume plot: {plot_path}") 
