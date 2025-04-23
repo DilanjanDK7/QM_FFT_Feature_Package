@@ -984,7 +984,7 @@ class MapBuilder:
             
         return self.analysis_results
 
-    def process_map(self, n_centers=2, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5,
+    def process_map(self, n_centers=1, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5,
                   use_analytical_gradient=None, skip_interpolation=True):
         """Run the main processing steps: FFT, masks, inverse, gradients, and analysis.
         
