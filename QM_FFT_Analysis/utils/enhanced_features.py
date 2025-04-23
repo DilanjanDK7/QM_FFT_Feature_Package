@@ -64,25 +64,24 @@ def compute_radial_gradient(fft_result, kx, ky, kz, eps=1e-6, dtype='complex128'
         ky (np.ndarray): 1D array of k-space coordinates in y direction.
         kz (np.ndarray): 1D array of k-space coordinates in z direction.
         eps (float, optional): FINUFFT precision. Defaults to 1e-6.
-        dtype (str, optional): Data type for complex values. Defaults to 'complex128'.
+        dtype (str, optional): Data type for complex values. Must be 'complex128' for FINUFFT.
         
     Returns:
         np.ndarray: Gradient map with shape (n_trans, nx, ny, nz).
     """
     n_trans, nx, ny, nz = fft_result.shape
     
-    # Create 3D k-space coordinate grids
-    Kx, Ky, Kz = np.meshgrid(kx, ky, kz, indexing='ij')
+    # Create 3D k-space coordinate grids (use float32 for efficiency)
+    Kx = kx.astype(np.float32)
+    Ky = ky.astype(np.float32)
+    Kz = kz.astype(np.float32)
+    Kx, Ky, Kz = np.meshgrid(Kx, Ky, Kz, indexing='ij')
     
     # Calculate k-space radial distance from origin (k-magnitude)
     K_mag = np.sqrt(Kx**2 + Ky**2 + Kz**2)
     
-    # Multiply by i*2π*‖k‖
-    # This is the frequency domain equivalent of taking radial derivative
-    gradient_fft = fft_result * (1j * 2 * np.pi * K_mag)
-    
-    # Note: The inverse transform is typically done in the MapBuilder class
-    # This function returns the modified k-space coefficients
+    # Multiply by i*2π*‖k‖ (convert to complex128 for FINUFFT compatibility)
+    gradient_fft = fft_result * (1j * 2 * np.pi * K_mag).astype(np.complex128)
     
     return gradient_fft
 
@@ -98,66 +97,50 @@ def calculate_spectral_slope(fft_result, kx, ky, kz, k_min=None, k_max=None, nbi
         k_min (float, optional): Minimum k value for fitting. Defaults to 0.1*k_max.
         k_max (float, optional): Maximum k value for fitting. Defaults to 0.8*k_nyquist.
         nbins (int, optional): Number of radial bins. Defaults to 50.
-        
-    Returns:
-        np.ndarray: Spectral slope (alpha) for each transform, shape (n_trans,).
     """
-    n_trans = fft_result.shape[0]
-    slopes = np.zeros(n_trans)
+    # Convert k-space coordinates to float32 for efficiency
+    kx = kx.astype(np.float32)
+    ky = ky.astype(np.float32)
+    kz = kz.astype(np.float32)
     
-    # Create 3D k-space coordinate grids
+    # Create meshgrid
     Kx, Ky, Kz = np.meshgrid(kx, ky, kz, indexing='ij')
     
-    # Calculate k-space radial distance from origin
-    K_mag = np.sqrt(Kx**2 + Ky**2 + Kz**2)
+    # Calculate radial distance in k-space
+    k_rad = np.sqrt(Kx**2 + Ky**2 + Kz**2)
     
-    # Determine k_min and k_max if not provided
-    k_nyquist = np.max(K_mag)
-    if k_min is None:
-        k_min = 0.1 * k_nyquist
+    # Set k range if not provided
     if k_max is None:
-        k_max = 0.8 * k_nyquist
-    
-    # Define radial bins
-    r_bins = np.linspace(k_min, k_max, nbins + 1)
-    bin_centers = 0.5 * (r_bins[1:] + r_bins[:-1])
-    
-    # Power-law fit function
-    def power_law(x, alpha, C):
-        return C - alpha * x  # Log-log form: log(P) = -alpha*log(k) + C
-    
-    for t in range(n_trans):
-        # Calculate power spectrum
-        power = np.abs(fft_result[t])**2
+        k_max = 0.8 * k_rad.max()
+    if k_min is None:
+        k_min = 0.1 * k_max
         
-        # Bin power by radial k value
-        power_binned = np.zeros(nbins)
-        count_binned = np.zeros(nbins, dtype=int)
-        
-        for i in range(nbins):
-            mask = (K_mag >= r_bins[i]) & (K_mag < r_bins[i+1])
-            if np.sum(mask) > 0:
-                power_binned[i] = np.mean(power[mask])
-                count_binned[i] = np.sum(mask)
-        
-        # Only use bins with data
-        valid_bins = count_binned > 0
-        if np.sum(valid_bins) >= 3:  # Need at least 3 points for a meaningful fit
-            log_k = np.log(bin_centers[valid_bins])
-            log_P = np.log(power_binned[valid_bins])
+    # Create radial bins
+    k_bins = np.linspace(k_min, k_max, nbins, dtype=np.float32)
+    
+    # Calculate power spectrum
+    power_spectrum = np.abs(fft_result)**2
+    
+    # Bin the power spectrum radially
+    radial_profile = np.zeros((fft_result.shape[0], nbins-1), dtype=np.float32)
+    for i in range(nbins-1):
+        mask = (k_rad >= k_bins[i]) & (k_rad < k_bins[i+1])
+        radial_profile[:, i] = np.mean(power_spectrum[:, mask], axis=1)
+    
+    # Fit power law to each transform
+    k_centers = (k_bins[1:] + k_bins[:-1]) / 2
+    slopes = np.zeros(fft_result.shape[0], dtype=np.float32)
+    
+    for i in range(fft_result.shape[0]):
+        # Log-log fit
+        valid = radial_profile[i] > 0
+        if np.sum(valid) > 2:  # Need at least 3 points for meaningful fit
+            log_k = np.log10(k_centers[valid])
+            log_p = np.log10(radial_profile[i, valid])
+            slope, _ = np.polyfit(log_k, log_p, 1)
+            slopes[i] = slope
             
-            # Linear fit on log-log scale
-            try:
-                params, _ = curve_fit(power_law, log_k, log_P)
-                slopes[t] = params[0]  # Extract alpha
-            except:
-                logger.warning(f"Failed to fit power law for transform {t}, setting slope to 0")
-                slopes[t] = 0
-        else:
-            logger.warning(f"Insufficient data points for power law fit in transform {t}")
-            slopes[t] = 0
-    
-    return slopes
+    return slopes.astype(np.float32)  # Ensure float32 output
 
 def calculate_spectral_entropy(fft_result, kx, ky, kz, nbins=64):
     """

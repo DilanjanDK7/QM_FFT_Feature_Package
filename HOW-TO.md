@@ -136,9 +136,46 @@ print(f"Processing complete. Results saved in: {map_builder.output_dir / subject
 
 ## Output Files
 
-After running `process_map`, check the specified `output_dir`. You will find a folder named after your `subject_id` containing:
+When running the package, three HDF5 files are created for each subject in the output directory:
 
-*   `data/`: `.npy` files with the raw numerical results (forward FFT, masks, inverse maps, gradient maps).
-*   `plots/`: `.html` files if any volume plots were generated (currently requires manual calls to `generate_volume_plot`).
-*   `analysis/`: `.npy` files containing the results of the analyses specified in `analyses_to_run`.
-*   `map_builder.log`: A log file detailing the steps executed. 
+1. `data.h5`: Contains raw computational results
+   - Forward FFT results
+   - K-space masks
+   - Inverse maps
+   - Gradient maps
+
+2. `analysis.h5`: Contains analysis results
+   - Magnitude and phase calculations
+   - Local variance metrics (with k-neighbor specification)
+   - Temporal difference calculations
+   - Analysis summary group
+
+3. `enhanced.h5`: Contains enhanced feature results (if enabled)
+   - Spectral metrics (slope, entropy)
+   - Analytical gradient maps
+   - Higher-order moments
+   - Excitation maps
+
+## Performance Considerations
+
+When working with large datasets, consider the following:
+
+1. **Memory Requirements**
+   - Small scale (1K points, 5 times): ~100MB RAM
+   - Medium scale (5K points, 10 times): ~500MB RAM
+   - Large scale (50K points, 100 times): ~4GB RAM
+
+2. **Storage Requirements**
+   - Small scale: ~2MB total
+   - Medium scale: ~18MB total
+   - Large scale: ~1.7GB total
+
+3. **Processing Time**
+   - Small scale: ~1-2 seconds
+   - Medium scale: ~5-10 seconds
+   - Large scale: ~88 seconds
+
+4. **Optimization Tips**
+   - Use analytical gradient method for faster processing
+   - Enable HDF5 compression for efficient storage
+   - Consider batch processing for very large datasets 

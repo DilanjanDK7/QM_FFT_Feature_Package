@@ -6,6 +6,8 @@ import plotly.graph_objects as go
 from scipy.interpolate import griddata
 from scipy.spatial import KDTree
 import h5py
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 # Import the new analysis functions
 from .map_analysis import (
@@ -47,7 +49,7 @@ class MapBuilder:
             nz (int, optional): Number of grid points in the Z direction.
             eps (float, optional): FINUFFT precision. Defaults to 1e-6.
             upsampling_factor (int, optional): Upsampling factor for grid estimation. Defaults to 2.
-            dtype (str, optional): Data type for complex values. Defaults to 'complex128'.
+            dtype (str, optional): Data type for complex values. Must be 'complex128' for FINUFFT.
             estimate_grid (bool, optional): If True, estimate grid dimensions based on point density. Defaults to True.
             normalize_fft_result (bool, optional): Normalize FFT power spectrum. Defaults to False.
             padding (int, optional): [Deprecated/Test Compatibility] Padding factor. Defaults to 0.
@@ -63,23 +65,30 @@ class MapBuilder:
         if eps <= 0:
             raise ValueError("eps must be positive")
         
-        # Validate dtype
-        try:
-            np.dtype(dtype)
-        except TypeError:
-            raise ValueError(f"Invalid dtype: {dtype}")
+        # Validate dtype - must be complex128 for FINUFFT
+        if dtype != 'complex128':
+            raise ValueError("dtype must be 'complex128' for FINUFFT compatibility")
 
         self.subject_id = subject_id
         self.output_dir = Path(output_dir)
         self._setup_logging(subject_id)
 
+        # Create output directories
+        self.subject_dir = self.output_dir / subject_id
+        self.subject_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create HDF5 files for different data types
+        self.data_file = h5py.File(self.subject_dir / 'data.h5', 'w')
+        self.analysis_file = h5py.File(self.subject_dir / 'analysis.h5', 'w')
+        if enable_enhanced_features:
+            self.enhanced_file = h5py.File(self.subject_dir / 'enhanced.h5', 'w')
+
         # --- Assign parameters early --- 
         self.normalize_fft_result = normalize_fft_result 
-        self.padding = padding # For test compatibility
+        self.padding = padding
         self.stride = stride
-        self.eps = eps # Assign eps early too
-        self.upsampling_factor = upsampling_factor # Assign upsampling factor early
-        # --- End early assignments ---
+        self.eps = eps
+        self.upsampling_factor = upsampling_factor
 
         # Enhanced features settings
         self.enable_enhanced_features = enable_enhanced_features
@@ -90,46 +99,27 @@ class MapBuilder:
             else:
                 self.config = load_config(config_path)
                 self.logger.info("Enhanced features enabled with configuration")
-                
-        # Create output directories
-        self.subject_dir = self.output_dir / subject_id
-        self.plots_dir = self.subject_dir / "plots"
-        self.data_dir = self.subject_dir / "data"
-        self.analysis_dir = self.output_dir / self.subject_id / 'analysis'
-        self.enhanced_dir = self.output_dir / self.subject_id / 'enhanced'  # New directory for enhanced features
 
-        for directory in [self.subject_dir, self.plots_dir, self.data_dir, self.analysis_dir]:
-            directory.mkdir(parents=True, exist_ok=True)
-            
-        if self.enable_enhanced_features:
-            self.enhanced_dir.mkdir(parents=True, exist_ok=True)
-            self.logger.info(f"Enhanced features directory created: {self.enhanced_dir}")
-
-        self.logger.info(f"Output directories created/verified for subject: {subject_id}")
-        self.logger.info(f"Data directory: {self.data_dir}")
-        self.logger.info(f"Plots directory: {self.plots_dir}")
-        self.logger.info(f"Analysis directory: {self.analysis_dir}")
-
-        # Convert coordinates to float64 and ensure they are 1D
-        x_in = np.asarray(x, dtype=np.float64).ravel()
-        y_in = np.asarray(y, dtype=np.float64).ravel()
-        z_in = np.asarray(z, dtype=np.float64).ravel()
+        # Convert coordinates to float32 for memory efficiency (except when used with FINUFFT)
+        x_in = np.asarray(x, dtype=np.float32).ravel()
+        y_in = np.asarray(y, dtype=np.float32).ravel()
+        z_in = np.asarray(z, dtype=np.float32).ravel()
         self.n_points = x_in.size
 
         if not (x_in.shape == y_in.shape == z_in.shape):
             raise ValueError("x, y, and z must have the same number of points after flattening")
          
-        # Store coordinates (used by plotting if needed later)
+        # Store coordinates
         self.x_coords_1d = x_in
         self.y_coords_1d = y_in
         self.z_coords_1d = z_in
 
-        # Handle strengths: Convert and determine n_trans
-        strengths_in = np.asarray(strengths, dtype=dtype)
+        # Handle strengths and convert to complex128 for FINUFFT
+        strengths_in = np.asarray(strengths, dtype=np.complex128)
         if strengths_in.ndim == 1:
             if strengths_in.size != self.n_points:
                 raise ValueError(f"1D strengths size ({strengths_in.size}) must match number of points ({self.n_points})")
-            self.strengths = strengths_in.reshape(1, self.n_points) # Reshape to (1, N)
+            self.strengths = strengths_in.reshape(1, self.n_points)
             self.n_trans = 1
         elif strengths_in.ndim == 2:
             if strengths_in.shape[1] != self.n_points:
@@ -141,26 +131,21 @@ class MapBuilder:
 
         self.logger.info(f"Initialized with n_trans = {self.n_trans}")
         
-        self.x = x_in
-        self.y = y_in
-        self.z = z_in
+        # Store coordinates for FINUFFT (must be float64)
+        self.x = x_in.astype(np.float64)  # Required by FINUFFT
+        self.y = y_in.astype(np.float64)  # Required by FINUFFT
+        self.z = z_in.astype(np.float64)  # Required by FINUFFT
         self.dtype = np.dtype(dtype)
-        self.real_dtype = np.float64 if self.dtype == np.complex128 else np.float32
+        self.real_dtype = np.float32  # Use float32 for real numbers
 
         if self.strengths.ndim == 1:
-            self.strengths = self.strengths[np.newaxis, :] # Add batch dim if needed
+            self.strengths = self.strengths[np.newaxis, :]
         self.n_trans, self.n_points = self.strengths.shape
 
         if not (self.x.size == self.y.size == self.z.size == self.n_points):
              raise ValueError("Coordinate array sizes must match the number of strength points.")
 
         self.logger.info(f"Initialized with n_trans = {self.n_trans}, n_points = {self.n_points}")
-
-        # Flatten coordinates for FINUFFT
-        self.x_coords_1d = self.x.flatten().astype(self.real_dtype)
-        self.y_coords_1d = self.y.flatten().astype(self.real_dtype)
-        self.z_coords_1d = self.z.flatten().astype(self.real_dtype)
-        self.points_nu = np.stack((self.x_coords_1d, self.y_coords_1d, self.z_coords_1d), axis=-1) # Store non-uniform points
 
         # Grid Dimensions
         if estimate_grid:
@@ -175,14 +160,14 @@ class MapBuilder:
         self.n_modes = (self.nx, self.ny, self.nz)
 
         # Initialize k-space grids (1D)
-        self.kx = np.fft.fftfreq(self.nx, d=self.stride)
-        self.ky = np.fft.fftfreq(self.ny, d=self.stride)
-        self.kz = np.fft.fftfreq(self.nz, d=self.stride)
+        self.kx = np.fft.fftfreq(self.nx, d=self.stride).astype(np.float32)
+        self.ky = np.fft.fftfreq(self.ny, d=self.stride).astype(np.float32)
+        self.kz = np.fft.fftfreq(self.nz, d=self.stride).astype(np.float32)
         
         # Create 3D k-space coordinate grids for masking
         self.Kx, self.Ky, self.Kz = np.meshgrid(self.kx, self.ky, self.kz, indexing='ij')
 
-        # Initialize FINUFFT plans (Now self.eps is defined)
+        # Initialize FINUFFT plans
         self.forward_plan = None
         self.inverse_plan = None
         self._initialize_plans()
@@ -195,15 +180,59 @@ class MapBuilder:
         self.gradient_maps = []
         self.analysis_results = {}
         
-        # Enhanced features storage - only initialize if enabled
         if self.enable_enhanced_features:
             self.enhanced_results = {}
-            self.analytical_gradient_maps = []
 
         self.logger.info("MapBuilder initialized successfully")
-        
         if self.enable_enhanced_features:
             self.logger.info("Enhanced features are enabled")
+
+    def __del__(self):
+        """Cleanup method to ensure HDF5 files are properly closed."""
+        try:
+            self.data_file.close()
+            self.analysis_file.close()
+            if hasattr(self, 'enhanced_file'):
+                self.enhanced_file.close()
+        except Exception as e:
+            self.logger.warning(f"Error closing HDF5 files: {e}")
+
+    def _save_to_hdf5(self, file_or_group, name, data, compression="gzip", compression_opts=9):
+        """Helper method to save data to HDF5 with compression.
+        Handles basic types, numpy arrays, and nested dictionaries.
+        """
+        # Check if the target name already exists in the current group/file
+        if name in file_or_group:
+            del file_or_group[name]
+            
+        if isinstance(data, dict):
+            # Create a group for the dictionary
+            group = file_or_group.create_group(name)
+            # Recursively save items within the dictionary to the new group
+            for key, value in data.items():
+                self._save_to_hdf5(group, key, value, compression, compression_opts)
+        elif isinstance(data, np.ndarray):
+            # Save NumPy array directly
+            file_or_group.create_dataset(name, data=data, compression=compression, compression_opts=compression_opts)
+        else:
+            # Attempt to save other types (int, float, bool, string, list, tuple)
+            try:
+                # Convert basic python types (or lists/tuples of them) to numpy arrays for saving
+                serializable_data = np.array(data) 
+                # Check if conversion resulted in object dtype (often indicates mixed types or unhandled objects)
+                if serializable_data.dtype == object:
+                    # Fallback to string if it's an object array
+                    self.logger.warning(f"Could not serialize '{name}' directly (dtype={serializable_data.dtype}). Saving as string.")
+                    file_or_group.create_dataset(name, data=str(data), compression=compression, compression_opts=compression_opts)
+                else:
+                    file_or_group.create_dataset(name, data=serializable_data, compression=compression, compression_opts=compression_opts)
+            except (TypeError, ValueError) as e:
+                # If conversion or direct saving fails, convert to string as fallback
+                self.logger.warning(f"Could not serialize '{name}' (type: {type(data)}, error: {e}). Saving as string.")
+                try:
+                    file_or_group.create_dataset(name, data=str(data), compression=compression, compression_opts=compression_opts)
+                except Exception as e_str:
+                    self.logger.error(f"Failed to save '{name}' even as string: {e_str}")
 
     def _setup_logging(self, subject_id):
         """Set up logging configuration."""
@@ -275,7 +304,7 @@ class MapBuilder:
         self.forward_fft = self.fft_result
 
         # Save raw FFT result to file
-        np.save(self.data_dir / "forward_fft.npy", self.fft_result)
+        self._save_to_hdf5(self.data_file, 'forward_fft', self.fft_result)
         self.logger.info("Forward FFT computed and saved")
 
         # Normalize if requested
@@ -290,7 +319,7 @@ class MapBuilder:
                  norm_factor[zero_power_mask] = 1.0 # Avoid division by zero, result will be 0
             
             self.fft_prob_density = prob_density / norm_factor # Shape (n_trans, nx, ny, nz)
-            np.save(self.data_dir / "fft_prob_density.npy", self.fft_prob_density)
+            self._save_to_hdf5(self.data_file, 'fft_prob_density', self.fft_prob_density)
             self.logger.info("FFT probability densities computed and saved.")
         else:
              self.fft_prob_density = None # Ensure it's None if not calculated
@@ -328,8 +357,7 @@ class MapBuilder:
             # Append and save
             mask_index = len(self.kspace_masks)
             self.kspace_masks.append(mask)
-            mask_filename = self.data_dir / f"kspace_mask_{mask_index}.npy"
-            np.save(mask_filename, mask)
+            mask_filename = self.data_file.create_dataset(f"kspace_mask_{mask_index}", data=mask)
             self.logger.info(f"Generated spherical mask {mask_index} centered near {center_k} and saved to {mask_filename}")
         
         self.logger.info(f"Total k-space masks generated: {len(self.kspace_masks)}")
@@ -355,8 +383,7 @@ class MapBuilder:
         # Append and save
         mask_index = len(self.kspace_masks)
         self.kspace_masks.append(mask)
-        mask_filename = self.data_dir / f"kspace_mask_{mask_index}.npy"
-        np.save(mask_filename, mask)
+        mask_filename = self.data_file.create_dataset(f"kspace_mask_{mask_index}", data=mask)
         self.logger.info(f"Generated cubic mask {mask_index} and saved to {mask_filename}")
 
     def generate_slice_mask(self, axis, k_value):
@@ -390,8 +417,7 @@ class MapBuilder:
             # Append and save
             mask_index = len(self.kspace_masks)
             self.kspace_masks.append(mask)
-            mask_filename = self.data_dir / f"kspace_mask_{mask_index}.npy"
-            np.save(mask_filename, mask)
+            mask_filename = self.data_file.create_dataset(f"kspace_mask_{mask_index}", data=mask)
             self.logger.info(f"Generated slice mask {mask_index} for axis {axis} at index {idx} (k~{actual_k:.4f}) and saved to {mask_filename}")
         
         except ValueError as e:
@@ -439,8 +465,7 @@ class MapBuilder:
             # Append and save
             mask_index = len(self.kspace_masks)
             self.kspace_masks.append(mask)
-            mask_filename = self.data_dir / f"kspace_mask_{mask_index}.npy"
-            np.save(mask_filename, mask)
+            mask_filename = self.data_file.create_dataset(f"kspace_mask_{mask_index}", data=mask)
             self.logger.info(f"Generated slab mask {mask_index} for axis {axis} covering k range ~[{k_range_actual[0]:.4f}, {k_range_actual[1]:.4f}] and saved to {mask_filename}")
 
         except ValueError as e:
@@ -474,16 +499,28 @@ class MapBuilder:
             
             # Save data to file
             # Save the (n_trans, n_points) array for this mask
-            np.save(
-                self.data_dir / f"inverse_map_{i}.npy",
-                inverse_map
-            )
+            self._save_to_hdf5(self.data_file, f"inverse_map_{i}", inverse_map)
 
             # Generate visualization for the inverse map
             # Plotting needs to be handled outside, as input is now 4D/batched
             # self.generate_volume_plot(inverse_map[0], f"inverse_volume_{i}_t0.html") # Example: Plot first transform
 
         self.logger.info(f"Computed inverse maps for {len(self.inverse_maps)} masks, each with {self.n_trans} transforms.")
+
+    def _interpolate_transform(self, points_nu, points_u, inverse_map_t, fill_val, nx, ny, nz):
+        """Helper function for parallel interpolation of a single transform."""
+        # Use KDTree for faster nearest-neighbor interpolation
+        tree = KDTree(points_nu)
+        distances, indices = tree.query(points_u, k=1)
+        
+        # Get interpolated values
+        interpolated = inverse_map_t[indices]
+        
+        # Handle any points that couldn't be interpolated
+        mask = distances > np.mean(distances) * 2  # Points too far from any data point
+        interpolated[mask] = fill_val
+        
+        return interpolated.reshape(nx, ny, nz)
 
     def compute_gradient_maps(self, use_analytical_method=None):
         """
@@ -501,7 +538,6 @@ class MapBuilder:
             use_analytical_method = self.config.get("gradient_weighting", False)
         elif use_analytical_method and not self.enable_enhanced_features:
             self.logger.warning("Analytical gradient method requested but enhanced features are not enabled. Using interpolation method.")
-            # Raise an exception for backwards compatibility testing
             raise RuntimeError("Analytical gradient method requires enhanced features to be enabled")
         
         if use_analytical_method and self.enable_enhanced_features and _ENHANCED_FEATURES_AVAILABLE:
@@ -514,49 +550,70 @@ class MapBuilder:
             return
 
         self.gradient_maps = []
-        self.logger.info(f"Computing gradient maps for {len(self.inverse_maps)} inverse maps using interpolation.")
+        self.logger.info(f"Computing gradient maps for {len(self.inverse_maps)} inverse maps using optimized interpolation.")
 
-        # Define source points (non-uniform)
-        points_nu = np.stack((self.x_coords_1d, self.y_coords_1d, self.z_coords_1d), axis=-1)
+        # Define source points (non-uniform) - convert to float32 for memory efficiency
+        points_nu = np.stack((
+            self.x_coords_1d.astype(np.float32),
+            self.y_coords_1d.astype(np.float32),
+            self.z_coords_1d.astype(np.float32)
+        ), axis=-1)
 
-        # Define target grid points (uniform)
-        grid_x = np.linspace(self.x_coords_1d.min(), self.x_coords_1d.max(), self.nx)
-        grid_y = np.linspace(self.y_coords_1d.min(), self.y_coords_1d.max(), self.ny)
-        grid_z = np.linspace(self.z_coords_1d.min(), self.z_coords_1d.max(), self.nz)
+        # Define target grid points (uniform) - convert to float32
+        grid_x = np.linspace(self.x_coords_1d.min(), self.x_coords_1d.max(), self.nx, dtype=np.float32)
+        grid_y = np.linspace(self.y_coords_1d.min(), self.y_coords_1d.max(), self.ny, dtype=np.float32)
+        grid_z = np.linspace(self.z_coords_1d.min(), self.z_coords_1d.max(), self.nz, dtype=np.float32)
         
         grid_x, grid_y, grid_z = np.meshgrid(grid_x, grid_y, grid_z, indexing='ij')
         points_u = np.stack((grid_x.ravel(), grid_y.ravel(), grid_z.ravel()), axis=-1)
         
+        # Create a partial function with fixed arguments for parallel processing
+        interpolate_func = partial(
+            self._interpolate_transform,
+            points_nu=points_nu,
+            points_u=points_u,
+            nx=self.nx,
+            ny=self.ny,
+            nz=self.nz
+        )
+        
         for i, inverse_map_nu in enumerate(self.inverse_maps):
-            interpolated_maps_grid = np.zeros((self.n_trans, self.nx, self.ny, self.nz), dtype=self.dtype)
-
-            for t in range(self.n_trans):
-                # Default fill value (could be set to 0 or mean or other strategy)
-                fill_val = np.mean(inverse_map_nu[t])
-                interpolated_data_flat = griddata(
-                    points_nu, 
-                    inverse_map_nu[t],
-                    points_u, 
-                    method='linear',
-                    fill_value=fill_val
-                )
-                interpolated_maps_grid[t] = interpolated_data_flat.reshape(self.nx, self.ny, self.nz)
-
-            # Calculate gradients
+            # Convert to float32 for memory efficiency
+            inverse_map_nu = inverse_map_nu.astype(np.float32)
+            
+            # Calculate fill value once per map
+            fill_val = np.mean(inverse_map_nu)
+            
+            # Use ThreadPoolExecutor for parallel processing of transforms
+            with ThreadPoolExecutor() as executor:
+                # Create tasks for each transform
+                futures = [
+                    executor.submit(interpolate_func, inverse_map_t=inverse_map_nu[t], fill_val=fill_val)
+                    for t in range(self.n_trans)
+                ]
+                
+                # Collect results
+                interpolated_maps = [future.result() for future in futures]
+            
+            # Stack results into a single array
+            interpolated_maps_grid = np.stack(interpolated_maps, axis=0)
+            
+            # Calculate gradients using float32
             try:
                 dz, dy, dx = np.gradient(interpolated_maps_grid, axis=(1, 2, 3))
-                gradient_magnitude = np.sqrt(np.abs(dx)**2 + np.abs(dy)**2 + np.abs(dz)**2) # Shape (n_trans, nx, ny, nz)
+                gradient_magnitude = np.sqrt(np.abs(dx)**2 + np.abs(dy)**2 + np.abs(dz)**2)
+                
+                # Convert back to original dtype for storage
+                gradient_magnitude = gradient_magnitude.astype(self.dtype)
 
                 self.gradient_maps.append(gradient_magnitude)
-                np.save(self.data_dir / f"gradient_map_{i}.npy", gradient_magnitude)
+                self._save_to_hdf5(self.data_file, f"gradient_map_{i}", gradient_magnitude)
                 self.logger.info(f"Gradient map {i} computed and saved after interpolation.")
 
-                # Optional: Generate visualization for the first transform's gradient
-                # self.generate_volume_plot(gradient_magnitude[0], f"gradient_volume_{i}_t0.html")
             except Exception as e:
                 self.logger.error(f"Error calculating gradient for map {i}: {e}")
 
-        self.logger.info(f"Computed gradient maps for {len(self.gradient_maps)} maps, each with {self.n_trans} transforms, using interpolation.")
+        self.logger.info(f"Computed gradient maps for {len(self.gradient_maps)} maps, each with {self.n_trans} transforms, using optimized interpolation.")
 
     def _compute_analytical_gradient_maps(self):
         """
@@ -594,11 +651,11 @@ class MapBuilder:
             gradient_magnitude_nu = np.abs(gradient_map_nu)
             
             # Save the analytical gradient results
-            np.save(self.enhanced_dir / f"analytical_gradient_map_{i}.npy", gradient_magnitude_nu)
+            self._save_to_hdf5(self.enhanced_file, f"analytical_gradient_map_{i}", gradient_magnitude_nu)
             
             # Also store it in legacy format for backward compatibility
             # This requires interpolation onto a uniform grid
-            points_nu = self.points_nu
+            points_nu = np.stack((self.x_coords_1d, self.y_coords_1d, self.z_coords_1d), axis=-1)
             grid_x = np.linspace(self.x_coords_1d.min(), self.x_coords_1d.max(), self.nx)
             grid_y = np.linspace(self.y_coords_1d.min(), self.y_coords_1d.max(), self.ny)
             grid_z = np.linspace(self.z_coords_1d.min(), self.z_coords_1d.max(), self.nz)
@@ -624,7 +681,7 @@ class MapBuilder:
             self.gradient_maps.append(gradient_magnitude_grid)
             
             # Save in the normal format too
-            np.save(self.data_dir / f"gradient_map_{i}.npy", gradient_magnitude_grid)
+            self._save_to_hdf5(self.data_file, f"gradient_map_{i}", gradient_magnitude_grid)
             
             self.logger.info(f"Analytical gradient map {i} computed and saved")
             
@@ -675,7 +732,7 @@ class MapBuilder:
                 k_min=k_min, k_max=k_max
             )
             enhanced_results['spectral_slope'] = spectral_slope
-            np.save(self.enhanced_dir / "spectral_slope.npy", spectral_slope)
+            self._save_to_hdf5(self.enhanced_file, "spectral_slope", spectral_slope)
             self.logger.info(f"Spectral slope computed: {spectral_slope}")
             
         # Spectral entropy
@@ -688,7 +745,7 @@ class MapBuilder:
                 nbins=nbins
             )
             enhanced_results['spectral_entropy'] = spectral_entropy
-            np.save(self.enhanced_dir / "spectral_entropy.npy", spectral_entropy)
+            self._save_to_hdf5(self.enhanced_file, "spectral_entropy", spectral_entropy)
             self.logger.info(f"Spectral entropy computed: {spectral_entropy}")
             
         # Anisotropy
@@ -701,7 +758,7 @@ class MapBuilder:
                 moment=moment
             )
             enhanced_results['anisotropy'] = anisotropy
-            np.save(self.enhanced_dir / "anisotropy.npy", anisotropy)
+            self._save_to_hdf5(self.enhanced_file, "anisotropy", anisotropy)
             self.logger.info(f"K-space anisotropy computed: {anisotropy}")
             
         # Higher-order moments
@@ -717,8 +774,8 @@ class MapBuilder:
                 enhanced_results[f"map_{i}"] = map_results
                 
                 # Save to files
-                np.save(self.enhanced_dir / f"map_{i}_skewness.npy", skewness)
-                np.save(self.enhanced_dir / f"map_{i}_kurtosis.npy", kurtosis)
+                self._save_to_hdf5(self.enhanced_file, f"map_{i}_skewness", skewness)
+                self._save_to_hdf5(self.enhanced_file, f"map_{i}_kurtosis", kurtosis)
                 
                 self.logger.info(f"Higher-order moments computed for map {i}")
                 
@@ -734,142 +791,158 @@ class MapBuilder:
             
             if excitation_map is not None:
                 enhanced_results['excitation_map'] = excitation_map
-                np.save(self.enhanced_dir / "excitation_map.npy", excitation_map)
+                self._save_to_hdf5(self.enhanced_file, "excitation_map", excitation_map)
                 self.logger.info(f"Excitation map computed with shape: {excitation_map.shape}")
             else:
                 self.logger.warning("Excitation map computation failed")
         
         # Store the enhanced results
         self.enhanced_results = enhanced_results
-        
-        # Save all results to a single HDF5 file
-        summary_file_path = self.enhanced_dir / "enhanced_metrics.h5"
+
+        # Save results to the HDF5 file
         try:
-            with h5py.File(summary_file_path, 'w') as f:
-                self.logger.info(f"Saving enhanced metrics to HDF5 file: {summary_file_path}")
-                self._save_dict_to_hdf5(f, '', enhanced_results)
-                self.logger.info("Successfully saved enhanced metrics to HDF5.")
+            metrics_group = self.enhanced_file.require_group("enhanced_metrics")
+            for metric_name, metric_data in enhanced_results.items():
+                if metric_name.startswith("map_"): # Handle nested results for higher_moments
+                    map_group = metrics_group.require_group(metric_name)
+                    for sub_metric_name, sub_metric_data in metric_data.items():
+                         # Check if dataset exists, delete if it does to overwrite
+                        if f"{sub_metric_name}" in map_group:
+                            del map_group[f"{sub_metric_name}"]
+                        map_group.create_dataset(f"{sub_metric_name}", data=sub_metric_data)
+                        self.logger.debug(f"Saved enhanced metric {metric_name}/{sub_metric_name} to HDF5")
+                else:
+                    # Check if dataset exists, delete if it does to overwrite
+                    if metric_name in metrics_group:
+                         del metrics_group[metric_name]
+                    metrics_group.create_dataset(metric_name, data=metric_data)
+                    self.logger.debug(f"Saved enhanced metric {metric_name} to HDF5")
+            self.logger.info(f"Successfully saved enhanced metrics to {self.enhanced_file.filename}")
         except Exception as e:
-            self.logger.error(f"Failed to save enhanced metrics to HDF5 file {summary_file_path}: {e}")
-            
+            self.logger.error(f"Failed to save enhanced metrics to HDF5: {e}", exc_info=True)
+            # Optional: re-raise or handle error appropriately
+            raise
+
         return enhanced_results
         
-    def analyze_inverse_maps(self, analyses_to_run=['magnitude', 'phase'], k_neighbors=5, save_format='hdf5', 
+    def analyze_inverse_maps(self, analyses_to_run=['magnitude', 'phase'], k_neighbors=5, save_format='hdf5',
                             compute_enhanced=None):
-        """Performs selected analyses on the computed non-uniform inverse maps.
-
-        Args:
-            analyses_to_run (list): A list of strings specifying which analyses to run.
-                                    Options: 'magnitude', 'phase', 'local_variance', 
-                                             'temporal_diff_magnitude', 'temporal_diff_phase'.
-                                             
-                                    Enhanced options (if enabled): 'spectral_slope', 'spectral_entropy',
-                                                                  'anisotropy', 'higher_moments', 'excitation'.
-            k_neighbors (int): Number of neighbors for local variance calculation.
-            save_format (str): Format to save the summary analysis results. 
-                               Options: 'hdf5' (default) saves a single HDF5 file,
-                                        'npz' logs that individual .npy files are saved and caller handles summary.
-            compute_enhanced (bool, optional): Whether to compute enhanced metrics.
-                                              If None, computes them if enhanced features are enabled.
-        """
-        if not self.inverse_maps:
-            self.logger.error("No inverse maps computed yet. Cannot run analysis.")
-            return
-
+        """Analyze inverse maps using various metrics."""
         self.logger.info(f"Starting analysis of {len(self.inverse_maps)} inverse maps. Analyses requested: {analyses_to_run}")
-        self.analysis_results = {} # Clear previous results
         
-        # Split standard and enhanced analyses
-        standard_analyses = []
-        enhanced_analyses = []
+        # Determine which analyses to run
+        standard_analyses = [a for a in analyses_to_run if a not in ['spectral_slope', 'spectral_entropy', 'anisotropy', 
+                                                                    'higher_moments', 'excitation']]
+        enhanced_analyses = [a for a in analyses_to_run if a in ['spectral_slope', 'spectral_entropy', 'anisotropy', 
+                                                               'higher_moments', 'excitation']]
         
-        for analysis in analyses_to_run:
-            if analysis in ['magnitude', 'phase', 'local_variance', 'temporal_diff_magnitude', 'temporal_diff_phase']:
-                standard_analyses.append(analysis)
-            elif analysis in ['spectral_slope', 'spectral_entropy', 'anisotropy', 'higher_moments', 'excitation']:
-                enhanced_analyses.append(analysis)
+        # Initialize results dictionary for this run
+        current_analysis_results = {}
         
-        # Run standard analyses
+        # Process each inverse map for standard analyses
         for i, inv_map_nu in enumerate(self.inverse_maps):
-            analysis_set = {} # Store results for this specific inverse map
             map_name_base = f"map_{i}"
-
-            # --- Simple Analyses (Magnitude, Phase) --- 
+            analysis_set = {}
+            
+            # Standard analyses
             if 'magnitude' in standard_analyses:
                 magnitude = calculate_magnitude(inv_map_nu)
                 analysis_set['magnitude'] = magnitude
-                np.save(self.analysis_dir / f"{map_name_base}_magnitude.npy", magnitude)
+                self._save_to_hdf5(self.analysis_file, f"{map_name_base}_magnitude", magnitude)
                 self.logger.debug(f"Computed and saved magnitude for {map_name_base}")
             
             if 'phase' in standard_analyses:
                 phase = calculate_phase(inv_map_nu)
                 analysis_set['phase'] = phase
-                np.save(self.analysis_dir / f"{map_name_base}_phase.npy", phase)
+                self._save_to_hdf5(self.analysis_file, f"{map_name_base}_phase", phase)
                 self.logger.debug(f"Computed and saved phase for {map_name_base}")
 
-            # --- Local Variance --- 
             if 'local_variance' in standard_analyses:
-                local_var = calculate_local_variance(inv_map_nu, self.points_nu, k=k_neighbors)
-                analysis_set['local_variance'] = local_var
-                np.save(self.analysis_dir / f"{map_name_base}_local_variance_k{k_neighbors}.npy", local_var)
+                points_nu = np.stack((self.x_coords_1d, self.y_coords_1d, self.z_coords_1d), axis=-1)
+                local_var = calculate_local_variance(inv_map_nu, points_nu, k=k_neighbors)
+                analysis_set[f'local_variance_k{k_neighbors}'] = local_var
+                self._save_to_hdf5(self.analysis_file, f"{map_name_base}_local_variance_k{k_neighbors}", local_var)
                 self.logger.debug(f"Computed and saved local variance (k={k_neighbors}) for {map_name_base}")
 
-            # --- Temporal Differences --- 
-            # Temporal diff requires magnitude/phase to be calculated first if not already done
-            temp_magnitude = analysis_set.get('magnitude')
-            if 'temporal_diff_magnitude' in standard_analyses:
-                if temp_magnitude is None:
-                     temp_magnitude = calculate_magnitude(inv_map_nu) # Calculate if needed
-                
-                td_mag = calculate_temporal_difference(temp_magnitude)
-                if td_mag is not None:
-                    analysis_set['temporal_diff_magnitude'] = td_mag
-                    np.save(self.analysis_dir / f"{map_name_base}_temporal_diff_magnitude.npy", td_mag)
-                    self.logger.debug(f"Computed and saved temporal difference (magnitude) for {map_name_base}")
-                else:
-                    self.logger.warning(f"Skipping temporal difference (magnitude) for {map_name_base} - requires n_trans >= 2.")
+            # --- Corrected Temporal Difference Logic --- 
+            run_td_mag = 'temporal_diff_magnitude' in standard_analyses
+            run_td_phase = 'temporal_diff_phase' in standard_analyses
 
-            temp_phase = analysis_set.get('phase')
-            if 'temporal_diff_phase' in standard_analyses:
-                if temp_phase is None:
-                     temp_phase = calculate_phase(inv_map_nu) # Calculate if needed
+            if (run_td_mag or run_td_phase) and self.n_trans > 1:
+                # Ensure magnitude is available if needed for td_mag
+                if run_td_mag:
+                    if 'magnitude' not in analysis_set:
+                        # Calculate magnitude if not already done
+                        magnitude = calculate_magnitude(inv_map_nu)
+                        # Storing it temporarily, won't save unless explicitly requested
+                        analysis_set['magnitude_temp'] = magnitude 
+                        self.logger.debug(f"Calculated temporary magnitude for TD calculation on {map_name_base}")
+                    else:
+                        magnitude = analysis_set['magnitude']
+                    
+                    td_mag = calculate_temporal_difference(magnitude) # Calculate diff on magnitude
+                    if td_mag is not None:
+                        analysis_set['temporal_diff_magnitude'] = td_mag
+                        self._save_to_hdf5(self.analysis_file, f"{map_name_base}_temporal_diff_magnitude", td_mag)
+                        self.logger.debug(f"Computed and saved temporal difference (magnitude) for {map_name_base}")
+                    else:
+                        self.logger.warning(f"Temporal difference magnitude calculation returned None for {map_name_base}")
+                    # Clean up temp key if it exists
+                    if 'magnitude_temp' in analysis_set: del analysis_set['magnitude_temp']
 
-                td_phase = calculate_temporal_difference(temp_phase)
-                if td_phase is not None:
-                    analysis_set['temporal_diff_phase'] = td_phase
-                    np.save(self.analysis_dir / f"{map_name_base}_temporal_diff_phase.npy", td_phase)
-                    self.logger.debug(f"Computed and saved temporal difference (phase) for {map_name_base}")
-                else:
-                    self.logger.warning(f"Skipping temporal difference (phase) for {map_name_base} - requires n_trans >= 2.")
+                # Ensure phase is available if needed for td_phase
+                if run_td_phase:
+                    if 'phase' not in analysis_set:
+                         # Calculate phase if not already done
+                        phase = calculate_phase(inv_map_nu)
+                        # Storing it temporarily, won't save unless explicitly requested
+                        analysis_set['phase_temp'] = phase 
+                        self.logger.debug(f"Calculated temporary phase for TD calculation on {map_name_base}")
+                    else:
+                        phase = analysis_set['phase']
+
+                    td_phase = calculate_temporal_difference(phase) # Calculate diff on phase
+                    if td_phase is not None:
+                        analysis_set['temporal_diff_phase'] = td_phase
+                        self._save_to_hdf5(self.analysis_file, f"{map_name_base}_temporal_diff_phase", td_phase)
+                        self.logger.debug(f"Computed and saved temporal difference (phase) for {map_name_base}")
+                    else:
+                        self.logger.warning(f"Temporal difference phase calculation returned None for {map_name_base}")
+                    # Clean up temp key if it exists
+                    if 'phase_temp' in analysis_set: del analysis_set['phase_temp']
+
+            elif (run_td_mag or run_td_phase) and self.n_trans <= 1:
+                 self.logger.warning(f"Temporal difference requested but n_trans={self.n_trans} < 2 for {map_name_base}. Skipping.")
+            # --- End Corrected Temporal Difference Logic ---
             
-            # Store results for this map
-            self.analysis_results[map_name_base] = analysis_set
-            self.logger.debug(f"Completed analysis for map {i}") # Now inside loop
-
-        self.logger.info(f"Completed standard analysis calculation for {len(self.analysis_results)} maps.")
+            # Store the analysis set for this map
+            current_analysis_results[map_name_base] = analysis_set
+            
+        # Enhanced analyses if requested and available
+        # Note: compute_enhanced_metrics saves its results directly to enhanced_file
+        if enhanced_analyses and (compute_enhanced or (compute_enhanced is None and self.enable_enhanced_features)):
+            enhanced_results = self.compute_enhanced_metrics(metrics_to_run=enhanced_analyses)
+            if enhanced_results:
+                # Add enhanced results to the summary dictionary as well
+                current_analysis_results['enhanced'] = enhanced_results
         
-        # Run enhanced analyses if requested
-        if enhanced_analyses and self.enable_enhanced_features and _ENHANCED_FEATURES_AVAILABLE:
-            if compute_enhanced is None or compute_enhanced:
-                self.logger.info(f"Computing enhanced metrics: {enhanced_analyses}")
-                self.compute_enhanced_metrics(metrics_to_run=enhanced_analyses)
-        elif enhanced_analyses and not (self.enable_enhanced_features and _ENHANCED_FEATURES_AVAILABLE):
-            self.logger.warning(f"Enhanced analyses requested but enhanced features not enabled or available: {enhanced_analyses}")
-
+        self.logger.info("Completed analysis calculation for {} maps.".format(len(self.inverse_maps)))
+        
+        # Update the main analysis_results attribute
+        self.analysis_results.update(current_analysis_results)
+        
         # Save the summary analysis_results dictionary based on save_format
         if save_format == 'hdf5':
-            summary_file_path = self.analysis_dir / "analysis_summary.h5"
-            try:
-                with h5py.File(summary_file_path, 'w') as f:
-                    self.logger.info(f"Saving analysis results dictionary to HDF5 file: {summary_file_path}")
-                    self._save_dict_to_hdf5(f, '', self.analysis_results)
-                    self.logger.info("Successfully saved analysis results to HDF5.")
-            except Exception as e:
-                self.logger.error(f"Failed to save analysis results to HDF5 file {summary_file_path}: {e}")
+            # Pass the file object and the desired top-level name for the summary group
+            self._save_to_hdf5(self.analysis_file, "analysis_summary", self.analysis_results)
+            self.logger.info("Successfully saved analysis results summary to HDF5")
         elif save_format == 'npz':
-            self.logger.info("Individual analysis results saved as .npy files. Caller is responsible for creating a summary .npz file if needed.")
+            # This part remains unchanged, saving individual files is fine.
+            self.logger.info("Individual analysis results saved as .npy files or in HDF5. Caller is responsible for creating a summary .npz file if needed.")
         else:
-            self.logger.warning(f"Unsupported save_format '{save_format}'. No summary file generated. Individual .npy files were still saved.")
+            self.logger.warning(f"Unsupported save format: {save_format}")
+            
+        return self.analysis_results
 
     def process_map(self, n_centers=2, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5,
                   use_analytical_gradient=None):
@@ -895,48 +968,6 @@ class MapBuilder:
         self.analyze_inverse_maps(analyses_to_run=analyses_to_run, k_neighbors=k_neighbors_local_var)
 
         self.logger.info("Map processing pipeline complete.")
-
-    def _save_dict_to_hdf5(self, hdf5_file, path, dictionary):
-        """Recursively saves dictionary contents to an HDF5 file.
-
-        Args:
-            hdf5_file (h5py.File): The open HDF5 file object.
-            path (str): The current group path within the HDF5 file.
-            dictionary (dict): The dictionary to save.
-        """
-        for key, item in dictionary.items():
-            current_path = f"{path}/{key}" if path else key # Build path
-            if isinstance(item, dict):
-                # Create group for sub-dictionary and recurse
-                try:
-                    group = hdf5_file.create_group(current_path)
-                    self._save_dict_to_hdf5(hdf5_file, current_path, item)
-                except ValueError: # Handle case where group might already exist if called multiple times
-                    self.logger.warning(f"Group '{current_path}' already exists in HDF5 file. Overwriting or skipping entries.")
-                    self._save_dict_to_hdf5(hdf5_file, current_path, item) 
-            elif isinstance(item, np.ndarray):
-                # Save NumPy array as dataset
-                try:
-                    hdf5_file.create_dataset(current_path, data=item)
-                except ValueError: 
-                     self.logger.warning(f"Dataset '{current_path}' already exists in HDF5 file. Overwriting.")
-                     del hdf5_file[current_path] # Delete existing dataset before creating new one
-                     hdf5_file.create_dataset(current_path, data=item)
-            elif item is not None: # Handle basic types like numbers, strings
-                 try:
-                     # Attempt to save as dataset; might need refinement for complex types
-                     hdf5_file.create_dataset(current_path, data=item)
-                 except TypeError:
-                      self.logger.warning(f"Could not save item of type {type(item)} directly to HDF5 dataset at '{current_path}'. Converting to string.")
-                      try:
-                           hdf5_file.create_dataset(current_path, data=str(item))
-                      except Exception as e:
-                           self.logger.error(f"Failed to save item {key} as string to HDF5: {e}")
-                 except ValueError:
-                     self.logger.warning(f"Dataset '{current_path}' already exists in HDF5 file. Overwriting.")
-                     del hdf5_file[current_path]
-                     hdf5_file.create_dataset(current_path, data=item)
-            # else: skip None values
 
     def generate_volume_plot(self, data, filename, opacity=0.5, surface_count=10, colormap="viridis"):
         """Generate interactive 3D volume plot."""
@@ -977,6 +1008,6 @@ class MapBuilder:
         )
 
         # Save plot to HTML file
-        plot_path = self.plots_dir / filename
+        plot_path = self.subject_dir / filename
         fig.write_html(str(plot_path))
-        self.logger.info(f"Saved volume plot: {plot_path}") 
+        self.logger.info(f"Saved volume plot: {plot_path}")

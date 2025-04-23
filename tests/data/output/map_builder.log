@@ -1,0 +1,205 @@
+2025-04-22 23:06:15,322 - MapBuilder_test_enhanced_nt1 - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,322 - MapBuilder_test_enhanced_nt1 - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,322 - MapBuilder_test_enhanced_nt1 - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,323 - MapBuilder_test_enhanced_nt1 - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,323 - MapBuilder_test_enhanced_nt1 - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,338 - MapBuilder_test_enhanced_nt1 - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,338 - MapBuilder_test_enhanced_nt1 - INFO - Generating 2 spherical k-space masks with radius 0.5
+2025-04-22 23:06:15,338 - MapBuilder_test_enhanced_nt1 - INFO - Generated spherical mask 0 centered near (np.float32(0.2), np.float32(-0.5), np.float32(-0.3)) and saved to <HDF5 dataset "kspace_mask_0": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,338 - MapBuilder_test_enhanced_nt1 - INFO - Generated spherical mask 1 centered near (np.float32(0.1), np.float32(0.4), np.float32(0.2)) and saved to <HDF5 dataset "kspace_mask_1": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,338 - MapBuilder_test_enhanced_nt1 - INFO - Total k-space masks generated: 2
+2025-04-22 23:06:15,364 - MapBuilder_test_enhanced_nt1 - INFO - Computed inverse maps for 2 masks, each with 1 transforms.
+2025-04-22 23:06:15,364 - MapBuilder_test_enhanced_nt1 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-22 23:06:15,369 - MapBuilder_test_enhanced_nt1 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-22 23:06:15,372 - MapBuilder_test_enhanced_nt1 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-22 23:06:15,372 - MapBuilder_test_enhanced_nt1 - INFO - Computed gradient maps for 2 maps, each with 1 transforms, using optimized interpolation.
+2025-04-22 23:06:15,372 - MapBuilder_test_enhanced_nt1 - INFO - Starting analysis of 2 inverse maps. Analyses requested: ['magnitude', 'phase', 'local_variance']
+2025-04-22 23:06:15,376 - MapBuilder_test_enhanced_nt1 - INFO - Completed standard analysis calculation for 2 maps.
+2025-04-22 23:06:15,377 - MapBuilder_test_enhanced_nt1 - INFO - Successfully saved analysis results to HDF5
+2025-04-22 23:06:15,377 - MapBuilder_test_enhanced_nt1 - INFO - Map processing pipeline complete.
+2025-04-22 23:06:15,395 - MapBuilder_test_disabled_nt1 - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,395 - MapBuilder_test_disabled_nt1 - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,395 - MapBuilder_test_disabled_nt1 - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,396 - MapBuilder_test_disabled_nt1 - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,396 - MapBuilder_test_disabled_nt1 - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,410 - MapBuilder_test_disabled_nt1 - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,410 - MapBuilder_test_disabled_nt1 - INFO - Generating 2 spherical k-space masks with radius 0.5
+2025-04-22 23:06:15,410 - MapBuilder_test_disabled_nt1 - INFO - Generated spherical mask 0 centered near (np.float32(0.1), np.float32(-0.4), np.float32(0.3)) and saved to <HDF5 dataset "kspace_mask_0": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,411 - MapBuilder_test_disabled_nt1 - INFO - Generated spherical mask 1 centered near (np.float32(0.2), np.float32(-0.2), np.float32(0.4)) and saved to <HDF5 dataset "kspace_mask_1": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,411 - MapBuilder_test_disabled_nt1 - INFO - Total k-space masks generated: 2
+2025-04-22 23:06:15,440 - MapBuilder_test_disabled_nt1 - INFO - Computed inverse maps for 2 masks, each with 1 transforms.
+2025-04-22 23:06:15,440 - MapBuilder_test_disabled_nt1 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-22 23:06:15,444 - MapBuilder_test_disabled_nt1 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-22 23:06:15,448 - MapBuilder_test_disabled_nt1 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-22 23:06:15,448 - MapBuilder_test_disabled_nt1 - INFO - Computed gradient maps for 2 maps, each with 1 transforms, using optimized interpolation.
+2025-04-22 23:06:15,448 - MapBuilder_test_disabled_nt1 - INFO - Starting analysis of 2 inverse maps. Analyses requested: ['magnitude', 'phase', 'local_variance']
+2025-04-22 23:06:15,451 - MapBuilder_test_disabled_nt1 - INFO - Completed standard analysis calculation for 2 maps.
+2025-04-22 23:06:15,452 - MapBuilder_test_disabled_nt1 - INFO - Successfully saved analysis results to HDF5
+2025-04-22 23:06:15,452 - MapBuilder_test_disabled_nt1 - INFO - Map processing pipeline complete.
+2025-04-22 23:06:15,454 - MapBuilder_test_backward_nt1 - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,454 - MapBuilder_test_backward_nt1 - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,454 - MapBuilder_test_backward_nt1 - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,455 - MapBuilder_test_backward_nt1 - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,455 - MapBuilder_test_backward_nt1 - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,468 - MapBuilder_test_backward_nt1 - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,468 - MapBuilder_test_backward_nt1 - INFO - Generating 2 spherical k-space masks with radius 0.5
+2025-04-22 23:06:15,468 - MapBuilder_test_backward_nt1 - INFO - Generated spherical mask 0 centered near (np.float32(-0.4), np.float32(-0.2), np.float32(-0.2)) and saved to <HDF5 dataset "kspace_mask_0": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,469 - MapBuilder_test_backward_nt1 - INFO - Generated spherical mask 1 centered near (np.float32(-0.5), np.float32(0.4), np.float32(-0.2)) and saved to <HDF5 dataset "kspace_mask_1": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,469 - MapBuilder_test_backward_nt1 - INFO - Total k-space masks generated: 2
+2025-04-22 23:06:15,498 - MapBuilder_test_backward_nt1 - INFO - Computed inverse maps for 2 masks, each with 1 transforms.
+2025-04-22 23:06:15,498 - MapBuilder_test_backward_nt1 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-22 23:06:15,502 - MapBuilder_test_backward_nt1 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-22 23:06:15,505 - MapBuilder_test_backward_nt1 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-22 23:06:15,505 - MapBuilder_test_backward_nt1 - INFO - Computed gradient maps for 2 maps, each with 1 transforms, using optimized interpolation.
+2025-04-22 23:06:15,509 - MapBuilder_test_analysis_nt1 - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,509 - MapBuilder_test_analysis_nt1 - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,509 - MapBuilder_test_analysis_nt1 - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,510 - MapBuilder_test_analysis_nt1 - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,510 - MapBuilder_test_analysis_nt1 - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,521 - MapBuilder_test_analysis_nt1 - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,522 - MapBuilder_test_analysis_nt1 - INFO - Generating 2 spherical k-space masks with radius 0.5
+2025-04-22 23:06:15,522 - MapBuilder_test_analysis_nt1 - INFO - Generated spherical mask 0 centered near (np.float32(-0.3), np.float32(-0.2), np.float32(0.0)) and saved to <HDF5 dataset "kspace_mask_0": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,522 - MapBuilder_test_analysis_nt1 - INFO - Generated spherical mask 1 centered near (np.float32(-0.4), np.float32(0.1), np.float32(-0.5)) and saved to <HDF5 dataset "kspace_mask_1": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,522 - MapBuilder_test_analysis_nt1 - INFO - Total k-space masks generated: 2
+2025-04-22 23:06:15,553 - MapBuilder_test_analysis_nt1 - INFO - Computed inverse maps for 2 masks, each with 1 transforms.
+2025-04-22 23:06:15,553 - MapBuilder_test_analysis_nt1 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-22 23:06:15,558 - MapBuilder_test_analysis_nt1 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-22 23:06:15,561 - MapBuilder_test_analysis_nt1 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-22 23:06:15,561 - MapBuilder_test_analysis_nt1 - INFO - Computed gradient maps for 2 maps, each with 1 transforms, using optimized interpolation.
+2025-04-22 23:06:15,561 - MapBuilder_test_analysis_nt1 - INFO - Starting analysis of 2 inverse maps. Analyses requested: ['magnitude', 'phase', 'local_variance']
+2025-04-22 23:06:15,565 - MapBuilder_test_analysis_nt1 - INFO - Completed standard analysis calculation for 2 maps.
+2025-04-22 23:06:15,565 - MapBuilder_test_analysis_nt1 - INFO - Successfully saved analysis results to HDF5
+2025-04-22 23:06:15,565 - MapBuilder_test_analysis_nt1 - INFO - Map processing pipeline complete.
+2025-04-22 23:06:15,571 - MapBuilder_test_viz_nt1 - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,571 - MapBuilder_test_viz_nt1 - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,571 - MapBuilder_test_viz_nt1 - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,572 - MapBuilder_test_viz_nt1 - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,572 - MapBuilder_test_viz_nt1 - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,586 - MapBuilder_test_viz_nt1 - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,587 - MapBuilder_test_viz_nt1 - INFO - Generating 2 spherical k-space masks with radius 0.5
+2025-04-22 23:06:15,587 - MapBuilder_test_viz_nt1 - INFO - Generated spherical mask 0 centered near (np.float32(0.4), np.float32(-0.5), np.float32(-0.1)) and saved to <HDF5 dataset "kspace_mask_0": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,587 - MapBuilder_test_viz_nt1 - INFO - Generated spherical mask 1 centered near (np.float32(0.2), np.float32(-0.3), np.float32(0.2)) and saved to <HDF5 dataset "kspace_mask_1": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,587 - MapBuilder_test_viz_nt1 - INFO - Total k-space masks generated: 2
+2025-04-22 23:06:15,613 - MapBuilder_test_viz_nt1 - INFO - Computed inverse maps for 2 masks, each with 1 transforms.
+2025-04-22 23:06:15,613 - MapBuilder_test_viz_nt1 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-22 23:06:15,617 - MapBuilder_test_viz_nt1 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-22 23:06:15,621 - MapBuilder_test_viz_nt1 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-22 23:06:15,621 - MapBuilder_test_viz_nt1 - INFO - Computed gradient maps for 2 maps, each with 1 transforms, using optimized interpolation.
+2025-04-22 23:06:15,621 - MapBuilder_test_viz_nt1 - INFO - Starting analysis of 2 inverse maps. Analyses requested: ['magnitude', 'phase', 'local_variance']
+2025-04-22 23:06:15,624 - MapBuilder_test_viz_nt1 - INFO - Completed standard analysis calculation for 2 maps.
+2025-04-22 23:06:15,625 - MapBuilder_test_viz_nt1 - INFO - Successfully saved analysis results to HDF5
+2025-04-22 23:06:15,625 - MapBuilder_test_viz_nt1 - INFO - Map processing pipeline complete.
+2025-04-22 23:06:15,631 - MapBuilder_test_error_nt1 - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,631 - MapBuilder_test_error_nt1 - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,631 - MapBuilder_test_error_nt1 - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,632 - MapBuilder_test_error_nt1 - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,633 - MapBuilder_test_error_nt1 - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,645 - MapBuilder_test_error_nt1 - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,645 - MapBuilder_test_error_nt1 - INFO - Generating 2 spherical k-space masks with radius 0.5
+2025-04-22 23:06:15,646 - MapBuilder_test_error_nt1 - INFO - Generated spherical mask 0 centered near (np.float32(0.3), np.float32(0.3), np.float32(0.2)) and saved to <HDF5 dataset "kspace_mask_0": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,646 - MapBuilder_test_error_nt1 - INFO - Generated spherical mask 1 centered near (np.float32(0.1), np.float32(0.3), np.float32(-0.1)) and saved to <HDF5 dataset "kspace_mask_1": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,646 - MapBuilder_test_error_nt1 - INFO - Total k-space masks generated: 2
+2025-04-22 23:06:15,670 - MapBuilder_test_error_nt1 - INFO - Computed inverse maps for 2 masks, each with 1 transforms.
+2025-04-22 23:06:15,670 - MapBuilder_test_error_nt1 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-22 23:06:15,674 - MapBuilder_test_error_nt1 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-22 23:06:15,678 - MapBuilder_test_error_nt1 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-22 23:06:15,678 - MapBuilder_test_error_nt1 - INFO - Computed gradient maps for 2 maps, each with 1 transforms, using optimized interpolation.
+2025-04-22 23:06:15,678 - MapBuilder_test_error_nt1 - INFO - Starting analysis of 2 inverse maps. Analyses requested: ['invalid_analysis']
+2025-04-22 23:06:15,678 - MapBuilder_test_error_nt1 - INFO - Completed standard analysis calculation for 2 maps.
+2025-04-22 23:06:15,678 - MapBuilder_test_error_nt1 - INFO - Successfully saved analysis results to HDF5
+2025-04-22 23:06:15,678 - MapBuilder_test_error_nt1 - INFO - Map processing pipeline complete.
+2025-04-22 23:06:15,683 - MapBuilder_enhanced_test - INFO - Enhanced features enabled with configuration
+2025-04-22 23:06:15,683 - MapBuilder_enhanced_test - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,683 - MapBuilder_enhanced_test - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,683 - MapBuilder_enhanced_test - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,685 - MapBuilder_enhanced_test - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,685 - MapBuilder_enhanced_test - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,685 - MapBuilder_enhanced_test - INFO - Enhanced features are enabled
+2025-04-22 23:06:15,689 - MapBuilder_gradient_test - INFO - Enhanced features enabled with configuration
+2025-04-22 23:06:15,689 - MapBuilder_gradient_test - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,690 - MapBuilder_gradient_test - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,690 - MapBuilder_gradient_test - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,691 - MapBuilder_gradient_test - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,691 - MapBuilder_gradient_test - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,691 - MapBuilder_gradient_test - INFO - Enhanced features are enabled
+2025-04-22 23:06:15,700 - MapBuilder_gradient_test - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,700 - MapBuilder_gradient_test - INFO - Generating 1 spherical k-space masks with radius 0.5
+2025-04-22 23:06:15,700 - MapBuilder_gradient_test - INFO - Generated spherical mask 0 centered near (np.float32(-0.2), np.float32(-0.2), np.float32(0.0)) and saved to <HDF5 dataset "kspace_mask_0": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,700 - MapBuilder_gradient_test - INFO - Total k-space masks generated: 1
+2025-04-22 23:06:15,714 - MapBuilder_gradient_test - INFO - Computed inverse maps for 1 masks, each with 1 transforms.
+2025-04-22 23:06:15,714 - MapBuilder_gradient_test - INFO - Computing gradient maps using analytical method (enhanced feature).
+2025-04-22 23:06:15,714 - MapBuilder_gradient_test - INFO - Computing analytical gradient maps for 1 masks
+2025-04-22 23:06:15,730 - MapBuilder_gradient_test - INFO - Analytical gradient map 0 computed and saved
+2025-04-22 23:06:15,730 - MapBuilder_gradient_test - INFO - Computed analytical gradient maps for 1 masks
+2025-04-22 23:06:15,736 - MapBuilder_spectral_slope_test - INFO - Enhanced features enabled with configuration
+2025-04-22 23:06:15,736 - MapBuilder_spectral_slope_test - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,736 - MapBuilder_spectral_slope_test - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,736 - MapBuilder_spectral_slope_test - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,737 - MapBuilder_spectral_slope_test - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,737 - MapBuilder_spectral_slope_test - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,737 - MapBuilder_spectral_slope_test - INFO - Enhanced features are enabled
+2025-04-22 23:06:15,755 - MapBuilder_spectral_slope_test - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,756 - MapBuilder_spectral_slope_test - INFO - Computing enhanced metrics: ['spectral_slope']
+2025-04-22 23:06:15,756 - MapBuilder_spectral_slope_test - INFO - Computing spectral slope with k_range: [0.1, 0.8]
+2025-04-22 23:06:15,757 - MapBuilder_spectral_slope_test - INFO - Spectral slope computed: [0.01602822]
+2025-04-22 23:06:15,776 - MapBuilder_spectral_entropy_test - INFO - Enhanced features enabled with configuration
+2025-04-22 23:06:15,776 - MapBuilder_spectral_entropy_test - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,776 - MapBuilder_spectral_entropy_test - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,776 - MapBuilder_spectral_entropy_test - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,777 - MapBuilder_spectral_entropy_test - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,778 - MapBuilder_spectral_entropy_test - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,778 - MapBuilder_spectral_entropy_test - INFO - Enhanced features are enabled
+2025-04-22 23:06:15,796 - MapBuilder_spectral_entropy_test - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,796 - MapBuilder_spectral_entropy_test - INFO - Computing enhanced metrics: ['spectral_entropy']
+2025-04-22 23:06:15,796 - MapBuilder_spectral_entropy_test - INFO - Computing spectral entropy with 64 bins
+2025-04-22 23:06:15,796 - MapBuilder_spectral_entropy_test - INFO - Spectral entropy computed: [4.67816591]
+2025-04-22 23:06:15,817 - MapBuilder_anisotropy_test - INFO - Enhanced features enabled with configuration
+2025-04-22 23:06:15,817 - MapBuilder_anisotropy_test - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,817 - MapBuilder_anisotropy_test - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,817 - MapBuilder_anisotropy_test - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,818 - MapBuilder_anisotropy_test - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,818 - MapBuilder_anisotropy_test - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,818 - MapBuilder_anisotropy_test - INFO - Enhanced features are enabled
+2025-04-22 23:06:15,832 - MapBuilder_anisotropy_test - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,833 - MapBuilder_anisotropy_test - INFO - Computing enhanced metrics: ['anisotropy']
+2025-04-22 23:06:15,833 - MapBuilder_anisotropy_test - INFO - Computing k-space anisotropy with moment=2
+2025-04-22 23:06:15,833 - MapBuilder_anisotropy_test - INFO - K-space anisotropy computed: [0.10883042]
+2025-04-22 23:06:15,853 - MapBuilder_moments_test - INFO - Enhanced features enabled with configuration
+2025-04-22 23:06:15,853 - MapBuilder_moments_test - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,853 - MapBuilder_moments_test - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,853 - MapBuilder_moments_test - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,854 - MapBuilder_moments_test - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,854 - MapBuilder_moments_test - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,854 - MapBuilder_moments_test - INFO - Enhanced features are enabled
+2025-04-22 23:06:15,867 - MapBuilder_moments_test - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,867 - MapBuilder_moments_test - INFO - Generating 1 spherical k-space masks with radius 0.5
+2025-04-22 23:06:15,867 - MapBuilder_moments_test - INFO - Generated spherical mask 0 centered near (np.float32(0.2), np.float32(0.1), np.float32(0.0)) and saved to <HDF5 dataset "kspace_mask_0": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,868 - MapBuilder_moments_test - INFO - Total k-space masks generated: 1
+2025-04-22 23:06:15,885 - MapBuilder_moments_test - INFO - Computed inverse maps for 1 masks, each with 1 transforms.
+2025-04-22 23:06:15,885 - MapBuilder_moments_test - INFO - Computing enhanced metrics: ['higher_moments']
+2025-04-22 23:06:15,885 - MapBuilder_moments_test - INFO - Computing higher-order moments for inverse map 0
+2025-04-22 23:06:15,886 - MapBuilder_moments_test - INFO - Higher-order moments computed for map 0
+2025-04-22 23:06:15,906 - MapBuilder_full_pipeline_test - INFO - Enhanced features enabled with configuration
+2025-04-22 23:06:15,906 - MapBuilder_full_pipeline_test - INFO - Initialized with n_trans = 1
+2025-04-22 23:06:15,906 - MapBuilder_full_pipeline_test - INFO - Initialized with n_trans = 1, n_points = 100
+2025-04-22 23:06:15,906 - MapBuilder_full_pipeline_test - INFO - Estimated grid dimensions (nx, ny, nz): (10, 10, 10) based on 100 points
+2025-04-22 23:06:15,907 - MapBuilder_full_pipeline_test - INFO - FINUFFT plans initialized
+2025-04-22 23:06:15,907 - MapBuilder_full_pipeline_test - INFO - MapBuilder initialized successfully
+2025-04-22 23:06:15,907 - MapBuilder_full_pipeline_test - INFO - Enhanced features are enabled
+2025-04-22 23:06:15,922 - MapBuilder_full_pipeline_test - INFO - Forward FFT computed and saved
+2025-04-22 23:06:15,922 - MapBuilder_full_pipeline_test - INFO - Generating 1 spherical k-space masks with radius 0.5
+2025-04-22 23:06:15,922 - MapBuilder_full_pipeline_test - INFO - Generated spherical mask 0 centered near (np.float32(-0.2), np.float32(-0.1), np.float32(-0.3)) and saved to <HDF5 dataset "kspace_mask_0": shape (10, 10, 10), type "|b1">
+2025-04-22 23:06:15,922 - MapBuilder_full_pipeline_test - INFO - Total k-space masks generated: 1
+2025-04-22 23:06:15,934 - MapBuilder_full_pipeline_test - INFO - Computed inverse maps for 1 masks, each with 1 transforms.
+2025-04-22 23:06:15,935 - MapBuilder_full_pipeline_test - INFO - Computing gradient maps using analytical method (enhanced feature).
+2025-04-22 23:06:15,935 - MapBuilder_full_pipeline_test - INFO - Computing analytical gradient maps for 1 masks
+2025-04-22 23:06:15,951 - MapBuilder_full_pipeline_test - INFO - Analytical gradient map 0 computed and saved
+2025-04-22 23:06:15,951 - MapBuilder_full_pipeline_test - INFO - Computed analytical gradient maps for 1 masks
+2025-04-22 23:06:15,951 - MapBuilder_full_pipeline_test - INFO - Starting analysis of 1 inverse maps. Analyses requested: ['magnitude', 'phase', 'spectral_slope', 'spectral_entropy', 'anisotropy']
+2025-04-22 23:06:15,951 - MapBuilder_full_pipeline_test - INFO - Computing enhanced metrics: ['spectral_slope', 'spectral_entropy', 'anisotropy']
+2025-04-22 23:06:15,951 - MapBuilder_full_pipeline_test - INFO - Computing spectral slope with k_range: [0.1, 0.8]
+2025-04-22 23:06:15,952 - MapBuilder_full_pipeline_test - INFO - Spectral slope computed: [-0.04379239]
+2025-04-22 23:06:15,952 - MapBuilder_full_pipeline_test - INFO - Computing spectral entropy with 64 bins
+2025-04-22 23:06:15,953 - MapBuilder_full_pipeline_test - INFO - Spectral entropy computed: [4.67824749]
+2025-04-22 23:06:15,953 - MapBuilder_full_pipeline_test - INFO - Computing k-space anisotropy with moment=2
+2025-04-22 23:06:15,953 - MapBuilder_full_pipeline_test - INFO - K-space anisotropy computed: [0.067514]

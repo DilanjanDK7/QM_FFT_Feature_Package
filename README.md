@@ -12,16 +12,18 @@ This package provides tools for analyzing 3D data, potentially representing quan
 *   **Map Building:** Transforms scattered 3D data (strengths at x, y, z coordinates) into a uniform k-space representation.
 *   **K-Space Masking:** Allows generation and application of spherical masks in k-space to isolate specific frequency components.
 *   **Inverse Mapping:** Transforms masked k-space data back to the original non-uniform points.
-*   **Gradient Calculation:** Computes the spatial gradient magnitude of the inverse maps (after interpolation onto the uniform grid).
+*   **Gradient Calculation:** Computes the spatial gradient magnitude of the inverse maps using either interpolation or analytical methods.
 *   **Analysis Metrics:** Calculates additional metrics directly on the non-uniform inverse maps, including magnitude, phase, local variance, and temporal differences.
-*   **Visualization:** Generates interactive 3D volume plots using Plotly (currently requires manual calls).
+*   **Enhanced HDF5 Storage:** Efficiently organizes and compresses results in HDF5 format with proper grouping and dataset management.
+*   **Visualization:** Generates interactive 3D volume plots using Plotly.
 *   **Batch Processing:** Supports processing multiple sets of strength data (`n_trans`) associated with the same coordinates (e.g., time series).
+*   **Scalability:** Tested and optimized for large datasets (50,000+ points, 100+ time points).
 *   **Logging:** Provides detailed logging of the processing steps.
-*   **Directory Structure:** Organizes outputs into `data`, `plots`, and `analysis` subdirectories for each subject ID.
+*   **Directory Structure:** Organizes outputs into `data.h5`, `analysis.h5`, and `enhanced.h5` files for each subject ID.
 
 ### Enhanced Features (Optional)
 
-The package also includes enhanced features that can be enabled as needed:
+The package includes enhanced features that can be enabled as needed:
 
 *   **Analytic Radial Gradient:** Efficiently computes gradient maps directly in k-space using a single inverse NUFFT (2-5x faster).
 *   **Spectral Metrics:**
@@ -32,6 +34,21 @@ The package also includes enhanced features that can be enabled as needed:
 *   **HRF Deconvolution-Based Excitation Maps:** Estimates neuronal activity by deconvolving the hemodynamic response function.
 
 See the [Enhanced Features Guide](docs/enhanced_features_guide.md) for detailed documentation.
+
+## Performance
+
+The package has been tested with various data sizes:
+- Small datasets: 1,000 points, 5 time points (~2MB total output)
+- Medium datasets: 5,000 points, 10 time points (~18MB total output)
+- Large datasets: 50,000 points, 100 time points (~1.7GB total output)
+
+Key performance characteristics:
+- Forward FFT scales efficiently with grid size
+- Analytical gradient computation provides 2-5x speedup over interpolation
+- HDF5 compression reduces storage requirements
+- Memory usage scales linearly with data size
+
+For detailed performance metrics and optimization strategies, see the [Technical Reference](docs/technical_reference.md).
 
 ## Workflow
 
@@ -95,9 +112,27 @@ See the [Enhanced Features Example Notebook](notebooks/Enhanced_Features_Example
 
 ## Output Structure
 
-The typical output structure is detailed in the [HOW-TO Guide](./HOW-TO.md).
+The package generates three HDF5 files for each subject:
 
-When enhanced features are enabled, an additional `enhanced` directory is created to store enhanced metrics.
+1. `data.h5`: Contains raw computational results
+   - Forward FFT results
+   - K-space masks
+   - Inverse maps
+   - Gradient maps
+
+2. `analysis.h5`: Contains analysis results
+   - Magnitude and phase calculations
+   - Local variance metrics
+   - Temporal difference calculations
+   - Analysis summary group
+
+3. `enhanced.h5`: Contains enhanced feature results (if enabled)
+   - Spectral metrics (slope, entropy)
+   - Analytical gradient maps
+   - Higher-order moments
+   - Excitation maps
+
+Each file uses HDF5 compression and proper dataset organization for efficient storage and access.
 
 ## Contributing
 
