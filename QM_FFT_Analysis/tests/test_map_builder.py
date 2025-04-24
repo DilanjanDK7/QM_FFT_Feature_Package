@@ -52,7 +52,7 @@ def setup_teardown(request):
     if output_dir.exists():
         # Use try-except for robustness in cleanup
         try:
-            shutil.rmtree(output_dir)
+                shutil.rmtree(output_dir)
         except Exception as e:
             print(f"Error cleaning up {output_dir}: {e}")
 
@@ -313,7 +313,7 @@ def test_error_handling(): # Removed setup_teardown fixture dependency
         # Use try-finally to ensure files are closed even if init fails partially
         mb = None
         try:
-            mb = MapBuilder(subject_id="", output_dir=output_dir, x=x, y=y, z=z, strengths=strengths)
+                mb = MapBuilder(subject_id="", output_dir=output_dir, x=x, y=y, z=z, strengths=strengths)
         finally:
             if mb and hasattr(mb, 'data_file') and mb.data_file: mb.data_file.close()
             if mb and hasattr(mb, 'analysis_file') and mb.analysis_file: mb.analysis_file.close()
@@ -322,7 +322,7 @@ def test_error_handling(): # Removed setup_teardown fixture dependency
     with pytest.raises(ValueError, match="output_dir cannot be empty"):
         mb = None
         try:
-            mb = MapBuilder(subject_id="test_error", output_dir="", x=x, y=y, z=z, strengths=strengths)
+                mb = MapBuilder(subject_id="test_error", output_dir="", x=x, y=y, z=z, strengths=strengths)
         finally:
              if mb and hasattr(mb, 'data_file') and mb.data_file: mb.data_file.close()
              if mb and hasattr(mb, 'analysis_file') and mb.analysis_file: mb.analysis_file.close()
@@ -331,7 +331,7 @@ def test_error_handling(): # Removed setup_teardown fixture dependency
     with pytest.raises(ValueError, match="eps must be positive"):
         mb = None
         try:
-            mb = MapBuilder(subject_id="test_error", output_dir=output_dir, x=x, y=y, z=z, strengths=strengths, eps=0)
+                mb = MapBuilder(subject_id="test_error", output_dir=output_dir, x=x, y=y, z=z, strengths=strengths, eps=0)
         finally:
              if mb and hasattr(mb, 'data_file') and mb.data_file: mb.data_file.close()
              if mb and hasattr(mb, 'analysis_file') and mb.analysis_file: mb.analysis_file.close()
@@ -340,7 +340,7 @@ def test_error_handling(): # Removed setup_teardown fixture dependency
     with pytest.raises(ValueError, match="dtype must be 'complex128' for FINUFFT compatibility"):
         mb = None
         try:
-            mb = MapBuilder(subject_id="test_error", output_dir=output_dir, x=x, y=y, z=z, strengths=strengths, dtype='invalid')
+                mb = MapBuilder(subject_id="test_error", output_dir=output_dir, x=x, y=y, z=z, strengths=strengths, dtype='invalid')
         finally:
              if mb and hasattr(mb, 'data_file') and mb.data_file: mb.data_file.close()
              if mb and hasattr(mb, 'analysis_file') and mb.analysis_file: mb.analysis_file.close()
@@ -349,7 +349,7 @@ def test_error_handling(): # Removed setup_teardown fixture dependency
     with pytest.raises(ValueError, match="Strengths last dimension .* must match number of points"):
         mb = None
         try:
-            mb = MapBuilder(subject_id="test_error", output_dir=output_dir, x=x, y=y, z=z, strengths=np.random.rand(2, n_points + 1).astype(np.complex128)) # Wrong last dim
+                mb = MapBuilder(subject_id="test_error", output_dir=output_dir, x=x, y=y, z=z, strengths=np.random.rand(2, n_points + 1).astype(np.complex128)) # Wrong last dim
         finally:
             if mb and hasattr(mb, 'data_file') and mb.data_file: mb.data_file.close()
             if mb and hasattr(mb, 'analysis_file') and mb.analysis_file: mb.analysis_file.close()
@@ -358,7 +358,7 @@ def test_error_handling(): # Removed setup_teardown fixture dependency
     with pytest.raises(ValueError, match="strengths must be a 1D or 2D array"):
         mb = None
         try:
-             mb = MapBuilder(subject_id="test_error", output_dir=output_dir, x=x, y=y, z=z, strengths=np.random.rand(2, 3, n_points).astype(np.complex128)) # 3D is invalid
+                 mb = MapBuilder(subject_id="test_error", output_dir=output_dir, x=x, y=y, z=z, strengths=np.random.rand(2, 3, n_points).astype(np.complex128)) # 3D is invalid
         finally:
              if mb and hasattr(mb, 'data_file') and mb.data_file: mb.data_file.close()
              if mb and hasattr(mb, 'analysis_file') and mb.analysis_file: mb.analysis_file.close()
@@ -384,7 +384,7 @@ def test_mask_content(setup_teardown, monkeypatch):
         map_builder.compute_forward_fft()
         # Ensure FFT result is not all zeros initially (given the Gaussian input)
         assert not np.allclose(map_builder.fft_result, 0)
-        
+    
         # --- Monkeypatch np.random.uniform to return a fixed center (0,0,0) --- 
         # Incorrect use of random center - needs fixing
         # center_idx should be used instead
@@ -396,10 +396,10 @@ def test_mask_content(setup_teardown, monkeypatch):
         map_builder.kspace_masks.append(center_mask)
         map_builder._save_to_hdf5(map_builder.data_file, f"kspace_mask_0", center_mask)
         mask = map_builder.kspace_masks[0]
-
+    
         # Apply the mask
         masked_fft = map_builder.fft_result * mask # Broadcasts mask across n_trans
-        
+    
         # Verify the mask did something
         # 1. The masked result should not be identical to the original
         assert not np.array_equal(masked_fft, map_builder.fft_result)
@@ -429,12 +429,12 @@ def test_inverse_map_zero_input(setup_teardown):
         )
         map_builder.compute_forward_fft()
         map_builder.generate_kspace_masks(n_centers=1, radius=0.5)
-        
+    
         # Manually set the FFT result to zero before inverse transform
         map_builder.fft_result = np.zeros_like(map_builder.fft_result)
-        
+    
         map_builder.compute_inverse_maps()
-        
+    
         assert len(map_builder.inverse_maps) == 1
         # Check shape (n_trans, n_points)
         assert map_builder.inverse_maps[0].shape == (data['n_trans'], map_builder.n_points)
@@ -459,15 +459,15 @@ def test_gradient_map_constant_input(setup_teardown):
         )
         # Grid needs to be defined for gradient calculation
         if map_builder.nx is None: map_builder._estimate_grid_dims(map_builder.n_points)
-        
+    
         # Create a dummy inverse map (n_trans, n_points) of ones
         # We bypass compute_inverse_maps to avoid dependency
         constant_inverse_map = np.ones((data['n_trans'], map_builder.n_points), dtype=map_builder.dtype)
         map_builder.inverse_maps = [constant_inverse_map] # Use a list containing this map
-        
+    
         # Compute gradients (interpolation based)
         map_builder.compute_gradient_maps(use_analytical_method=False)
-        
+    
         assert len(map_builder.gradient_maps) == 1
         # Check shape (n_trans, nx, ny, nz)
         expected_shape = (data['n_trans'], map_builder.nx, map_builder.ny, map_builder.nz)
@@ -511,10 +511,10 @@ def test_custom_mask_shapes(setup_teardown):
             ky_min=-k_bound, ky_max=k_bound,
             kz_min=-k_bound, kz_max=k_bound
         )
-        
+    
         # 2. Slice Mask (DC component plane in z)
         map_builder.generate_slice_mask(axis='z', k_value=0) 
-        
+    
         # 3. Slab Mask (A band along x-axis)
         map_builder.generate_slab_mask(axis='x', k_min=0.05, k_max=0.15)
 
@@ -536,8 +536,8 @@ def test_custom_mask_shapes(setup_teardown):
 
         # --- Check inverse map files exist ---
         for i in range(initial_mask_count, initial_mask_count + num_masks_generated):
-             # Check corresponding HDF5 dataset exists
-             assert f'inverse_map_{i}' in map_builder.data_file, f"Inverse map dataset not found in HDF5: inverse_map_{i}"
+            # Check corresponding HDF5 dataset exists
+            assert f'inverse_map_{i}' in map_builder.data_file, f"Inverse map dataset not found in HDF5: inverse_map_{i}"
     finally:
         # Use correct variable name: map_builder
         if map_builder and hasattr(map_builder, 'data_file') and map_builder.data_file: map_builder.data_file.close()
