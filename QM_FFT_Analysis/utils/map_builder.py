@@ -12,7 +12,9 @@ from functools import partial
 # Import the new analysis functions
 from .map_analysis import (
     calculate_magnitude, calculate_phase, 
-    calculate_local_variance, calculate_temporal_difference
+    calculate_local_variance, calculate_temporal_difference,
+    calculate_local_variance_vectorized, calculate_temporal_difference_vectorized,
+    calculate_local_variance_fully_vectorized  # Add the new fully optimized function
 )
 
 # Import the enhanced features module conditionally
@@ -622,7 +624,7 @@ class MapBuilder:
             
             # Stack results into a single array
             interpolated_maps_grid = np.stack(interpolated_maps, axis=0)
-            
+
             # Calculate gradients using float32
             try:
                 dz, dy, dx = np.gradient(interpolated_maps_grid, axis=(1, 2, 3))
@@ -713,7 +715,7 @@ class MapBuilder:
                 
                 # Add to gradient_maps collection for backward compatibility
                 self.gradient_maps.append(gradient_magnitude_grid)
-                
+    
                 # Save interpolated version too
                 self._save_to_hdf5(self.data_file, f"gradient_map_{i}", gradient_magnitude_grid)
                 self.logger.info(f"Interpolated analytical gradient map {i} saved")
@@ -731,7 +733,7 @@ class MapBuilder:
     def compute_enhanced_metrics(self, metrics_to_run=None):
         """
         Compute enhanced spectral metrics from the FFT result.
-        
+
         Args:
             metrics_to_run (list, optional): List of metrics to compute. If None, computes all available metrics.
                 Options: 'spectral_slope', 'spectral_entropy', 'anisotropy', 'higher_moments', 'excitation'.
@@ -854,7 +856,7 @@ class MapBuilder:
                 else:
                     # Check if dataset exists, delete if it does to overwrite
                     if metric_name in metrics_group:
-                         del metrics_group[metric_name]
+                        del metrics_group[metric_name]
                     metrics_group.create_dataset(metric_name, data=metric_data)
                     self.logger.debug(f"Saved enhanced metric {metric_name} to HDF5")
             self.logger.info(f"Successfully saved enhanced metrics to {self.enhanced_file.filename}")
@@ -864,11 +866,11 @@ class MapBuilder:
             raise
 
         return enhanced_results
-        
+
     def analyze_inverse_maps(self, analyses_to_run=['magnitude', 'phase'], k_neighbors=5, save_format='hdf5',
                             compute_enhanced=None, enable_local_variance=False):
         """Analyze inverse maps using various metrics.
-        
+
         Args:
             analyses_to_run (list): List of analyses to run (magnitude, phase, temporal_diff_magnitude, etc.)
             k_neighbors (int): Number of neighbors for local variance calculation
@@ -891,7 +893,7 @@ class MapBuilder:
         for i, inv_map_nu in enumerate(self.inverse_maps):
             map_name_base = f"map_{i}"
             analysis_set = {}
-            
+
             # Standard analyses
             if 'magnitude' in standard_analyses:
                 magnitude = calculate_magnitude(inv_map_nu)
@@ -908,7 +910,8 @@ class MapBuilder:
             # Only calculate local variance if explicitly requested via parameter
             if 'local_variance' in standard_analyses and enable_local_variance:
                 points_nu = np.stack((self.x_coords_1d, self.y_coords_1d, self.z_coords_1d), axis=-1)
-                local_var = calculate_local_variance(inv_map_nu, points_nu, k=k_neighbors)
+                # Use the new optimized vectorized function for better performance
+                local_var = calculate_local_variance_fully_vectorized(inv_map_nu, points_nu, k=k_neighbors)
                 analysis_set[f'local_variance_k{k_neighbors}'] = local_var
                 self._save_to_hdf5(self.analysis_file, f"{map_name_base}_local_variance_k{k_neighbors}", local_var)
                 self.logger.debug(f"Computed and saved local variance (k={k_neighbors}) for {map_name_base}")
@@ -930,8 +933,9 @@ class MapBuilder:
                         self.logger.debug(f"Calculated temporary magnitude for TD calculation on {map_name_base}")
                     else:
                         magnitude = analysis_set['magnitude']
-                    
-                    td_mag = calculate_temporal_difference(magnitude) # Calculate diff on magnitude
+                
+                    # Use NumPy's optimized diff function for temporal difference
+                    td_mag = calculate_temporal_difference(magnitude)
                     if td_mag is not None:
                         analysis_set['temporal_diff_magnitude'] = td_mag
                         self._save_to_hdf5(self.analysis_file, f"{map_name_base}_temporal_diff_magnitude", td_mag)
@@ -952,7 +956,8 @@ class MapBuilder:
                     else:
                         phase = analysis_set['phase']
 
-                    td_phase = calculate_temporal_difference(phase) # Calculate diff on phase
+                    # Use NumPy's optimized diff function for temporal difference
+                    td_phase = calculate_temporal_difference(phase)
                     if td_phase is not None:
                         analysis_set['temporal_diff_phase'] = td_phase
                         self._save_to_hdf5(self.analysis_file, f"{map_name_base}_temporal_diff_phase", td_phase)
@@ -963,7 +968,7 @@ class MapBuilder:
                     if 'phase_temp' in analysis_set: del analysis_set['phase_temp']
 
             elif (run_td_mag or run_td_phase) and self.n_trans <= 1:
-                 self.logger.warning(f"Temporal difference requested but n_trans={self.n_trans} < 2 for {map_name_base}. Skipping.")
+                self.logger.warning(f"Temporal difference requested but n_trans={self.n_trans} < 2 for {map_name_base}. Skipping.")
             # --- End Corrected Temporal Difference Logic ---
             
             # Store the analysis set for this map
@@ -976,12 +981,12 @@ class MapBuilder:
             if enhanced_results:
                 # Add enhanced results to the summary dictionary as well
                 current_analysis_results['enhanced'] = enhanced_results
-        
+
         self.logger.info("Completed analysis calculation for {} maps.".format(len(self.inverse_maps)))
         
         # Update the main analysis_results attribute
         self.analysis_results.update(current_analysis_results)
-        
+
         # Save the summary analysis_results dictionary based on save_format
         if save_format == 'hdf5':
             # Pass the file object and the desired top-level name for the summary group
@@ -1025,7 +1030,7 @@ class MapBuilder:
         self.analyze_inverse_maps(analyses_to_run=analyses_to_run, k_neighbors=k_neighbors_local_var,
                                  enable_local_variance=calculate_local_variance)
 
-        self.logger.info("Map processing pipeline complete.")
+        self.logger.info("Map processing pipeline complete.") 
 
     def generate_volume_plot(self, data, filename, opacity=0.5, surface_count=10, colormap="viridis"):
         """Generate interactive 3D volume plot."""

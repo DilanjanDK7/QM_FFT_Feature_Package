@@ -131,7 +131,7 @@ def test_preprocessing_to_mapbuilder(setup_teardown):
         assert map_builder.analysis_results['map_0']['magnitude'].shape == (data["n_selected_times"], data["n_sources"])
         assert not np.iscomplexobj(map_builder.analysis_results['map_0']['magnitude'])
         assert 'phase' in map_builder.analysis_results['map_0']
-        
+            
         # Only check for local_variance if we requested to calculate it
         if calculate_local_var:
             assert f'local_variance_k{k_var}' in map_builder.analysis_results['map_0']
@@ -158,7 +158,7 @@ def test_mapbuilder_to_analysis(setup_teardown):
         subject_id = "integration_test_analysis"
         # Use n_selected_times for this test, as it's the dimension passed to MapBuilder
         strengths = np.random.randn(data["n_selected_times"], data["n_sources"]) + 1j * np.random.randn(data["n_selected_times"], data["n_sources"])
-        
+    
         map_builder = MapBuilder(
             subject_id=subject_id,
             output_dir=data["output_dir"],
@@ -171,7 +171,7 @@ def test_mapbuilder_to_analysis(setup_teardown):
             estimate_grid=True,
             normalize_fft_result=True
         )
-        
+    
         # Run the full pipeline instead of individual steps
         analysis_types = ['magnitude', 'phase', 'local_variance', 'temporal_diff_magnitude', 'temporal_diff_phase']
         k_var = 3
@@ -241,14 +241,14 @@ def test_full_pipeline_performance(setup_teardown):
             z=data["z"],
             strengths=np.random.randn(data["n_selected_times"], data["n_sources"]) + 1j * np.random.randn(data["n_selected_times"], data["n_sources"]) # Use selected times dim
         )
-
+    
         # Run the full pipeline and measure time
         start_time = time.time()
         map_builder.process_map(n_centers=2, radius=0.4, analyses_to_run=['magnitude'])
         end_time = time.time()
         duration = end_time - start_time
         print(f"\nFull pipeline duration: {duration:.2f} seconds")
-
+    
         # Basic check that results were generated
         assert len(map_builder.inverse_maps) > 0
         assert 'inverse_map_nu_0' in map_builder.data_file
