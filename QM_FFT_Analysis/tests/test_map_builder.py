@@ -52,7 +52,7 @@ def setup_teardown(request):
     if output_dir.exists():
         # Use try-except for robustness in cleanup
         try:
-                shutil.rmtree(output_dir)
+            shutil.rmtree(output_dir)
         except Exception as e:
             print(f"Error cleaning up {output_dir}: {e}")
 
@@ -374,18 +374,18 @@ def test_mask_content(setup_teardown, monkeypatch):
     data = setup_teardown
     map_builder = None
     try:
-        map_builder = MapBuilder(
-            subject_id=f"test_mask_content_nt{data['n_trans']}",
-            output_dir=data["output_dir"],
-            x=data["x"], y=data["y"], z=data["z"],
-            strengths=data["strengths"],
+    map_builder = MapBuilder(
+        subject_id=f"test_mask_content_nt{data['n_trans']}",
+        output_dir=data["output_dir"],
+        x=data["x"], y=data["y"], z=data["z"],
+        strengths=data["strengths"],
             dtype='complex128' # Ensure complex128
-        )
-        map_builder.compute_forward_fft()
-        # Ensure FFT result is not all zeros initially (given the Gaussian input)
-        assert not np.allclose(map_builder.fft_result, 0)
+    )
+    map_builder.compute_forward_fft()
+    # Ensure FFT result is not all zeros initially (given the Gaussian input)
+    assert not np.allclose(map_builder.fft_result, 0)
     
-        # --- Monkeypatch np.random.uniform to return a fixed center (0,0,0) --- 
+    # --- Monkeypatch np.random.uniform to return a fixed center (0,0,0) --- 
         # Incorrect use of random center - needs fixing
         # center_idx should be used instead
         # For simplicity, generate mask directly
@@ -395,21 +395,21 @@ def test_mask_content(setup_teardown, monkeypatch):
         center_mask = dist_sq <= radius**2
         map_builder.kspace_masks.append(center_mask)
         map_builder._save_to_hdf5(map_builder.data_file, f"kspace_mask_0", center_mask)
-        mask = map_builder.kspace_masks[0]
+    mask = map_builder.kspace_masks[0]
     
-        # Apply the mask
-        masked_fft = map_builder.fft_result * mask # Broadcasts mask across n_trans
+    # Apply the mask
+    masked_fft = map_builder.fft_result * mask # Broadcasts mask across n_trans
     
-        # Verify the mask did something
-        # 1. The masked result should not be identical to the original
-        assert not np.array_equal(masked_fft, map_builder.fft_result)
-        # 2. The masked result should not be all zeros (unless the original FFT was zero, which we checked)
-        assert not np.allclose(masked_fft, 0)
-        # 3. Check that the number of non-zero elements is plausible
-        num_mask_true = np.count_nonzero(mask)
-        masked_non_zeros = np.count_nonzero(masked_fft)
-        assert masked_non_zeros <= data['n_trans'] * num_mask_true 
-        assert masked_non_zeros > 0 # Mask should select something
+    # Verify the mask did something
+    # 1. The masked result should not be identical to the original
+    assert not np.array_equal(masked_fft, map_builder.fft_result)
+    # 2. The masked result should not be all zeros (unless the original FFT was zero, which we checked)
+    assert not np.allclose(masked_fft, 0)
+    # 3. Check that the number of non-zero elements is plausible
+    num_mask_true = np.count_nonzero(mask)
+    masked_non_zeros = np.count_nonzero(masked_fft)
+    assert masked_non_zeros <= data['n_trans'] * num_mask_true 
+    assert masked_non_zeros > 0 # Mask should select something
     finally:
         # Use correct variable name: map_builder
         if map_builder and hasattr(map_builder, 'data_file') and map_builder.data_file: map_builder.data_file.close()
@@ -420,26 +420,26 @@ def test_inverse_map_zero_input(setup_teardown):
     data = setup_teardown
     map_builder = None
     try:
-        map_builder = MapBuilder(
-            subject_id=f"test_inverse_zero_nt{data['n_trans']}",
-            output_dir=data["output_dir"],
-            x=data["x"], y=data["y"], z=data["z"],
-            strengths=data["strengths"],
+    map_builder = MapBuilder(
+        subject_id=f"test_inverse_zero_nt{data['n_trans']}",
+        output_dir=data["output_dir"],
+        x=data["x"], y=data["y"], z=data["z"],
+        strengths=data["strengths"],
             dtype='complex128' # Ensure complex128
-        )
-        map_builder.compute_forward_fft()
-        map_builder.generate_kspace_masks(n_centers=1, radius=0.5)
+    )
+    map_builder.compute_forward_fft()
+    map_builder.generate_kspace_masks(n_centers=1, radius=0.5)
     
-        # Manually set the FFT result to zero before inverse transform
-        map_builder.fft_result = np.zeros_like(map_builder.fft_result)
+    # Manually set the FFT result to zero before inverse transform
+    map_builder.fft_result = np.zeros_like(map_builder.fft_result)
     
-        map_builder.compute_inverse_maps()
+    map_builder.compute_inverse_maps()
     
-        assert len(map_builder.inverse_maps) == 1
-        # Check shape (n_trans, n_points)
-        assert map_builder.inverse_maps[0].shape == (data['n_trans'], map_builder.n_points)
-        # The inverse map should be all zeros (or very close due to precision)
-        assert np.allclose(map_builder.inverse_maps[0], 0, atol=1e-7)
+    assert len(map_builder.inverse_maps) == 1
+    # Check shape (n_trans, n_points)
+    assert map_builder.inverse_maps[0].shape == (data['n_trans'], map_builder.n_points)
+    # The inverse map should be all zeros (or very close due to precision)
+    assert np.allclose(map_builder.inverse_maps[0], 0, atol=1e-7)
     finally:
         # Use correct variable name: map_builder
         if map_builder and hasattr(map_builder, 'data_file') and map_builder.data_file: map_builder.data_file.close()
@@ -450,11 +450,11 @@ def test_gradient_map_constant_input(setup_teardown):
     data = setup_teardown
     map_builder = None
     try:
-        map_builder = MapBuilder(
-            subject_id=f"test_gradient_constant_nt{data['n_trans']}",
-            output_dir=data["output_dir"],
-            x=data["x"], y=data["y"], z=data["z"],
-            strengths=data["strengths"],
+    map_builder = MapBuilder(
+        subject_id=f"test_gradient_constant_nt{data['n_trans']}",
+        output_dir=data["output_dir"],
+        x=data["x"], y=data["y"], z=data["z"],
+        strengths=data["strengths"],
             dtype='complex128' # Ensure complex128
         )
         # Grid needs to be defined for gradient calculation
@@ -472,6 +472,8 @@ def test_gradient_map_constant_input(setup_teardown):
         # Check gradient magnitude - should be near zero for constant input
         assert np.allclose(map_builder.gradient_maps[0], 0, atol=1e-5)
 
+    # The gradient map corresponding to the constant input should be zero
+        assert np.allclose(map_builder.gradient_maps[0], 0, atol=1e-7) # Increased tolerance
     finally:
         if map_builder:
             try:
@@ -490,54 +492,54 @@ def test_custom_mask_shapes(setup_teardown):
     
     map_builder = None
     try:
-        map_builder = MapBuilder(
-            subject_id=subject_id,
-            output_dir=output_dir,
-            x=data["x"], y=data["y"], z=data["z"],
-            strengths=data["strengths"],
+    map_builder = MapBuilder(
+        subject_id=subject_id,
+        output_dir=output_dir,
+        x=data["x"], y=data["y"], z=data["z"],
+        strengths=data["strengths"],
             dtype='complex128' # Ensure complex128
-        )
+    )
 
-        # Need k-space coordinates, so compute forward FFT first
-        map_builder.compute_forward_fft()
-        assert map_builder.fft_result is not None
+    # Need k-space coordinates, so compute forward FFT first
+    map_builder.compute_forward_fft()
+    assert map_builder.fft_result is not None
 
-        # --- Generate Custom Masks ---
-        initial_mask_count = len(map_builder.kspace_masks) # Should be 0
-        assert initial_mask_count == 0
+    # --- Generate Custom Masks ---
+    initial_mask_count = len(map_builder.kspace_masks) # Should be 0
+    assert initial_mask_count == 0
 
-        # 1. Cubic Mask (small region around origin)
-        k_bound = 0.1 
-        map_builder.generate_cubic_mask(
-            kx_min=-k_bound, kx_max=k_bound,
-            ky_min=-k_bound, ky_max=k_bound,
-            kz_min=-k_bound, kz_max=k_bound
-        )
+    # 1. Cubic Mask (small region around origin)
+    k_bound = 0.1 
+    map_builder.generate_cubic_mask(
+        kx_min=-k_bound, kx_max=k_bound,
+        ky_min=-k_bound, ky_max=k_bound,
+        kz_min=-k_bound, kz_max=k_bound
+    )
     
-        # 2. Slice Mask (DC component plane in z)
-        map_builder.generate_slice_mask(axis='z', k_value=0) 
+    # 2. Slice Mask (DC component plane in z)
+    map_builder.generate_slice_mask(axis='z', k_value=0) 
     
-        # 3. Slab Mask (A band along x-axis)
-        map_builder.generate_slab_mask(axis='x', k_min=0.05, k_max=0.15)
+    # 3. Slab Mask (A band along x-axis)
+    map_builder.generate_slab_mask(axis='x', k_min=0.05, k_max=0.15)
 
-        num_masks_generated = 3
-        assert len(map_builder.kspace_masks) == initial_mask_count + num_masks_generated
+    num_masks_generated = 3
+    assert len(map_builder.kspace_masks) == initial_mask_count + num_masks_generated
 
-        # --- Basic checks on mask content and files ---
-        for i in range(initial_mask_count, initial_mask_count + num_masks_generated):
-            mask = map_builder.kspace_masks[i]
-            assert isinstance(mask, np.ndarray)
-            assert mask.shape == (map_builder.nx, map_builder.ny, map_builder.nz)
-            assert mask.dtype == bool
+    # --- Basic checks on mask content and files ---
+    for i in range(initial_mask_count, initial_mask_count + num_masks_generated):
+        mask = map_builder.kspace_masks[i]
+        assert isinstance(mask, np.ndarray)
+        assert mask.shape == (map_builder.nx, map_builder.ny, map_builder.nz)
+        assert mask.dtype == bool
             # Check corresponding HDF5 dataset exists
             assert f'kspace_mask_{i}' in map_builder.data_file, f"Mask dataset not found in HDF5: kspace_mask_{i}"
 
-        # --- Compute inverse maps using these masks ---
-        map_builder.compute_inverse_maps()
-        assert len(map_builder.inverse_maps) == initial_mask_count + num_masks_generated
+    # --- Compute inverse maps using these masks ---
+    map_builder.compute_inverse_maps()
+    assert len(map_builder.inverse_maps) == initial_mask_count + num_masks_generated
 
-        # --- Check inverse map files exist ---
-        for i in range(initial_mask_count, initial_mask_count + num_masks_generated):
+    # --- Check inverse map files exist ---
+    for i in range(initial_mask_count, initial_mask_count + num_masks_generated):
             # Check corresponding HDF5 dataset exists
             assert f'inverse_map_{i}' in map_builder.data_file, f"Inverse map dataset not found in HDF5: inverse_map_{i}"
     finally:

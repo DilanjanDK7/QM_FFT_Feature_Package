@@ -110,7 +110,7 @@ def calculate_local_variance(inverse_map_nu, points_nu, k=5):
                     # Calculate variance efficiently
                     neighbor_magnitudes = magnitudes_t[neighbor_indices]
                     local_variance_map[t, i] = np.var(neighbor_magnitudes, dtype=np.float32)
-                    
+        
         logger.debug("Local variance calculation complete.")
         return local_variance_map
     

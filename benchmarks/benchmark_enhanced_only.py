@@ -100,7 +100,7 @@ def benchmark_enhanced_only(n_points, n_trans):
     map_builder_full = MapBuilder(
         subject_id="benchmark_full",
         output_dir=Path("benchmark_output"),
-        x=x, y=y, z=z, 
+        x=x, y=y, z=z,
         strengths=strengths,
         enable_enhanced_features=True
     )
@@ -125,7 +125,7 @@ def benchmark_enhanced_only(n_points, n_trans):
     map_builder_enhanced = MapBuilder(
         subject_id="benchmark_enhanced",
         output_dir=Path("benchmark_output"),
-        x=x, y=y, z=z, 
+        x=x, y=y, z=z,
         strengths=strengths,
         enable_enhanced_features=True
     )
