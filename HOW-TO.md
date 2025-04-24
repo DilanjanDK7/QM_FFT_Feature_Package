@@ -7,34 +7,34 @@ This guide provides practical steps for installing and using the `QM_FFT_Analysi
 We recommend using a virtual environment to manage dependencies.
 
 1. **Clone the Repository:**
-   ```bash
-   # git clone <repository_url> # Replace with the actual URL
-   # cd QM_FFT_Feature_Package
-   ```
+    ```bash
+    # git clone <repository_url> # Replace with the actual URL
+    # cd QM_FFT_Feature_Package
+    ```
 
 2. **Create and Activate Virtual Environment:**
-   ```bash
-   # Using venv (Python 3 standard library)
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   
-   # Or using Conda
-   # conda create -n qmfft_env python=3.8 # Or your preferred Python version
-   # conda activate qmfft_env
-   ```
+    ```bash
+    # Using venv (Python 3 standard library)
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    
+    # Or using Conda
+    # conda create -n qmfft_env python=3.8 # Or your preferred Python version
+    # conda activate qmfft_env
+    ```
 
 3. **Install the Package and Dependencies:**
-   Navigate to the root directory of the project (where `pyproject.toml` is located) and run:
-   
+    Navigate to the root directory of the project (where `pyproject.toml` is located) and run:
+    
    * **Standard installation:**
-     ```bash
-     pip install .
-     ```
-     
+        ```bash
+        pip install .
+        ```
+
    * **Development (editable) installation:**
-     ```bash
-     pip install -e .
-     ```
+        ```bash
+        pip install -e .
+        ```
 
 ## Basic Usage Example
 
