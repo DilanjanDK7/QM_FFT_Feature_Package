@@ -55,11 +55,60 @@ hrf_kernel: "canonical"  # Type of HRF kernel to use for deconvolution
 
 To use a custom configuration, create a YAML file with the desired parameters and pass its path to the `config_path` parameter when initializing `MapBuilder`.
 
+## Running Enhanced Features
+
+There are two main ways to utilize the enhanced features:
+
+### 1. Integrated with Standard Pipeline
+
+Include enhanced metrics in the regular processing pipeline by specifying them in the `analyses_to_run` parameter:
+
+```python
+map_builder.process_map(
+    n_centers=2,
+    radius=0.5,
+    analyses_to_run=[
+        # Standard analyses
+        'magnitude', 'phase', 
+        # Enhanced analyses
+        'spectral_slope', 'spectral_entropy', 'anisotropy',
+        'higher_moments', 'excitation'
+    ],
+    use_analytical_gradient=True  # Use faster gradient method
+)
+```
+
+### 2. Running Enhanced Features Only
+
+Use the dedicated method to run only enhanced metrics without standard analysis:
+
+```python
+enhanced_metrics = map_builder.process_enhanced_metrics(
+    # Specify which metrics to run
+    metrics_to_run=['spectral_slope', 'spectral_entropy', 'anisotropy', 'excitation'],
+    
+    # Options for mask-dependent metrics
+    n_centers=1,       # Number of masks to generate if needed
+    radius=0.5,        # Radius for masks
+    skip_masks=True    # Skip mask-dependent metrics (faster processing)
+)
+
+# Access results
+print(f"Spectral slope: {enhanced_metrics['spectral_slope']}")
+print(f"Spectral entropy: {enhanced_metrics['spectral_entropy']}")
+```
+
+The `process_enhanced_metrics` method:
+- Automatically computes forward FFT if needed
+- Only generates masks if required for requested metrics
+- Can completely skip mask-dependent metrics for faster processing
+- Handles all necessary dependencies between metrics
+
 ## Analytic Radial Gradient
 
 The analytic radial gradient is computed directly in k-space using the property that a derivative in real space corresponds to a multiplication by frequency in k-space. This approach avoids the need for interpolation and numerical differentiation, resulting in:
 
-1. **Speed Improvement**: Typically 2-5x faster than the traditional approach.
+1. **Speed Improvement**: Typically 1.4x-2.3x faster than the traditional approach, based on benchmarks.
 2. **Accuracy**: May provide more accurate gradients, especially at boundaries.
 
 ### Usage
@@ -76,6 +125,19 @@ map_builder.process_map(
     use_analytical_gradient=True
 )
 ```
+
+### Performance Benchmarks
+
+The analytical gradient method shows significant performance improvements across dataset sizes:
+
+| Dataset Size (points, time points) | Standard Method | Analytical Method | Speedup |
+|-----------------------------------|----------------|-------------------|---------|
+| 1,000 points, 5 time points       | 0.321 ± 0.007s | 0.222 ± 0.003s    | 1.44x   |
+| 5,000 points, 10 time points      | 3.927 ± 0.059s | 1.704 ± 0.225s    | 2.30x   |
+| 10,000 points, 15 time points     | 11.178 ± 0.321s| 6.745 ± 0.236s    | 1.66x   |
+| 22,000 points, 15 time points     | 13.000 ± 0.019s| 7.997 ± 0.660s    | 1.63x   |
+
+The greatest speedup (2.30x) is observed on medium-sized datasets (5,000 points, 10 time points).
 
 ### Implementation Details
 
@@ -154,6 +216,13 @@ metrics = map_builder.compute_enhanced_metrics(
 spectral_slope = metrics['spectral_slope']
 spectral_entropy = metrics['spectral_entropy']
 anisotropy = metrics['anisotropy']
+
+# Fast computation using process_enhanced_metrics
+# This skips mask generation and inverse maps
+fast_metrics = map_builder.process_enhanced_metrics(
+    metrics_to_run=['spectral_slope', 'spectral_entropy', 'anisotropy'],
+    skip_masks=True  # Skip mask-dependent metrics
+)
 ```
 
 ## Higher-Order Moments
@@ -190,7 +259,12 @@ The "-3" term makes the kurtosis of a normal distribution equal to 0 (Fisher's d
 
 ```python
 # Compute higher-order moments
-metrics = map_builder.compute_enhanced_metrics(metrics_to_run=['higher_moments'])
+# Note: Requires inverse maps, so skip_masks must be False
+metrics = map_builder.process_enhanced_metrics(
+    metrics_to_run=['higher_moments'],
+    n_centers=1,       # Generate at least one mask
+    skip_masks=False   # Must be False for higher_moments
+)
 
 # Access results
 skewness = metrics['map_0']['skewness']
@@ -225,29 +299,67 @@ where `Y(f)` is the Fourier transform of the measured signal, `H(f)` is the Four
 
 ```python
 # Note: Requires at least 3 time points
-metrics = map_builder.compute_enhanced_metrics(metrics_to_run=['excitation'])
+metrics = map_builder.process_enhanced_metrics(
+    metrics_to_run=['excitation'],
+    skip_masks=True  # Can skip masks for excitation calculation
+)
 
 # Access results
 excitation_map = metrics['excitation_map']
 ```
 
-## Integration with the Processing Pipeline
+## Complete Example
 
-All enhanced features can be included in the processing pipeline by specifying them in the `analyses_to_run` parameter:
+Here's a comprehensive example showing how to use the enhanced features:
 
 ```python
+import numpy as np
+from QM_FFT_Analysis.utils.map_builder import MapBuilder
+
+# Generate test data
+n_points = 5000
+n_trans = 10
+x = np.random.uniform(-np.pi, np.pi, n_points)
+y = np.random.uniform(-np.pi, np.pi, n_points)
+z = np.random.uniform(-np.pi, np.pi, n_points)
+strengths = np.random.randn(n_trans, n_points) + 1j * np.random.randn(n_trans, n_points)
+
+# Initialize MapBuilder with enhanced features
+map_builder = MapBuilder(
+    subject_id="enhanced_example",
+    output_dir="./results",
+    x=x, y=y, z=z,
+    strengths=strengths,
+    enable_enhanced_features=True,
+    normalize_fft_result=True
+)
+
+# Option 1: Run only k-space metrics (fastest)
+kspace_metrics = map_builder.process_enhanced_metrics(
+    metrics_to_run=['spectral_slope', 'spectral_entropy', 'anisotropy'],
+    skip_masks=True  # Skip mask generation and inverse maps
+)
+print("K-space metrics:", kspace_metrics.keys())
+
+# Option 2: Run metrics including those that need inverse maps
+all_metrics = map_builder.process_enhanced_metrics(
+    metrics_to_run=['spectral_slope', 'higher_moments', 'excitation'],
+    n_centers=1,       # Generate one mask
+    skip_masks=False   # Must include masks for higher_moments
+)
+print("All enhanced metrics:", all_metrics.keys())
+
+# Option 3: Run complete pipeline with both standard and enhanced metrics
 map_builder.process_map(
     n_centers=2,
     radius=0.5,
     analyses_to_run=[
-        # Standard analyses
-        'magnitude', 'phase', 'local_variance',
-        # Enhanced analyses
-        'spectral_slope', 'spectral_entropy', 'anisotropy',
-        'higher_moments', 'excitation'
+        'magnitude', 'phase',
+        'spectral_slope', 'anisotropy'
     ],
-    use_analytical_gradient=True
+    use_analytical_gradient=True  # Use faster gradient method
 )
+print("Complete pipeline metrics:", map_builder.analysis_results.keys())
 ```
 
 ## Output Files

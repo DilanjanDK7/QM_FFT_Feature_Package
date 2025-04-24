@@ -251,705 +251,96 @@ For a complete list of references and academic background, see the [Technical Re
 A `Dockerfile` is provided to build a container image with the package and its dependencies installed.
 
 ```bash
-docker build -t qm-fft-analysis .
-docker run -it --rm -v $(pwd)/output:/app/output qm-fft-analysis python your_script.py 
+# Clone the repository
+git clone <repository_url>
+cd QM_FFT_Feature_Package
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install the package
+pip install -e .
 ```
 
-Replace `your_script.py` with the script you want to run inside the container. The `-v` flag mounts your local `output` directory to `/app/output` inside the container, allowing you to retrieve results.
+See [HOW-TO.md](./HOW-TO.md) for detailed installation instructions.
+
+## Quick Start
 
 ```python
 import numpy as np
-from QM_FFT_Analysis.utils.preprocessing import get_normalized_wavefunctions_at_times
-from QM_FFT_Analysis.utils.map_builder import MapBuilder
+from pathlib import Path
+from QM_FFT_Analysis.utils import MapBuilder
 
-# 1. Load or generate your time_series_data (sources, time) and 1D coordinates (x, y, z)
-n_sources = 50
-n_time = 200
-x_coords = np.random.uniform(-np.pi, np.pi, n_sources)
-y_coords = np.random.uniform(-np.pi, np.pi, n_sources)
-z_coords = np.random.uniform(-np.pi, np.pi, n_sources)
-time_series_data = np.random.randn(n_sources, n_time)
-
-# 2. Preprocess data for multiple time points
-time_indices_to_analyze = [50, 100, 150]
-normalized_wavefunctions_stack = get_normalized_wavefunctions_at_times(
-    time_series_data=time_series_data, 
-    time_indices=time_indices_to_analyze,
-    time_axis=1, # Assuming time is axis 1
-    source_axis=0 # Assuming sources are axis 0
-)
-# Shape is (n_times, n_sources)
-
-# 3. Use MapBuilder
-builder = MapBuilder(
-    subject_id='ExampleSubject', 
-    output_dir='./output', 
-    x=x_coords, 
-    y=y_coords, 
-    z=z_coords, 
-    strengths=normalized_wavefunctions_stack,
-    dtype='complex64', # Match preprocessing output
-    normalize_fft_result=True
-)
-# Builder automatically detects n_trans = len(time_indices_to_analyze)
-
-# 4. Run analysis (computes for all time points in strengths)
-builder.compute_forward_fft()
-# builder.generate_kspace_masks(...)
-# builder.compute_inverse_maps()
-# builder.compute_gradient_maps()
-
-# Results (e.g., gradients) will have shape (n_trans, nx, ny, nz)
-# Access results for a specific time point, e.g., gradients for time_indices_to_analyze[1]:
-# if builder.gradient_maps:
-#     gradient_map_t1 = builder.gradient_maps[0][1, :, :, :] # Assuming 1 mask, select 2nd time point ([1])
-#     # Visualize this 3D map separately if needed
-#     # builder.generate_volume_plot(gradient_map_t1, "gradient_map_t1.html")
-
-```
-
-## Complete Pipeline Execution
-
-### Basic Usage
-
-```python
-import numpy as np
-from QM_FFT_Analysis.utils.map_builder import MapBuilder
-
-# 1. Prepare your data
-n_points = 5000  # Number of spatial points
-n_times = 10    # Number of time points/transforms
-
-# Generate or load your coordinates
+# Prepare data (coordinates and complex strengths)
+n_points, n_times = 1000, 5
 x = np.random.uniform(-np.pi, np.pi, n_points)
 y = np.random.uniform(-np.pi, np.pi, n_points)
 z = np.random.uniform(-np.pi, np.pi, n_points)
-
-# Generate or load your strength values (complex-valued)
 strengths = np.random.randn(n_times, n_points) + 1j * np.random.randn(n_times, n_points)
 
-# 2. Initialize MapBuilder
-map_builder = MapBuilder(
-    subject_id='example_subject',
-    output_dir='/path/to/output',
-    x=x, 
-    y=y, 
-    z=z,
+# Initialize
+builder = MapBuilder(
+    subject_id="example_subject",
+    output_dir=Path("./output"),
+    x=x, y=y, z=z,
     strengths=strengths,
-    enable_enhanced_features=True,  # Enable additional analysis features
-    normalize_fft_result=True       # Normalize FFT results
+    enable_enhanced_features=True
 )
 
-# 3. Run the complete pipeline
-map_builder.process_map(
-    n_centers=2,              # Number of spherical masks
-    radius=0.5,              # Radius of masks in k-space
-    analyses_to_run=[        # List of analyses to perform
-        'magnitude',
-        'phase',
-        'spectral_slope',
-        'spectral_entropy'
-    ]
+# Full pipeline
+builder.process_map(
+    n_centers=2,
+    analyses_to_run=['magnitude', 'phase', 'spectral_slope', 'anisotropy'],
+    use_analytical_gradient=True  # Faster gradient calculation
 )
-```
 
-### Full Parameter Reference
-
-#### MapBuilder Initialization
-
-```python
-MapBuilder(
-    subject_id: str,          # Unique identifier for the subject
-    output_dir: str,          # Directory for output files
-    x: np.ndarray,           # X coordinates (shape: n_points)
-    y: np.ndarray,           # Y coordinates (shape: n_points)
-    z: np.ndarray,           # Z coordinates (shape: n_points)
-    strengths: np.ndarray,   # Complex strengths (shape: n_times × n_points)
-    
-    # Optional parameters
-    enable_enhanced_features: bool = False,  # Enable advanced analysis
-    normalize_fft_result: bool = True,       # Normalize FFT results
-    eps: float = 1e-6,                      # FINUFFT precision
-    dtype: str = 'complex64',               # Data type for calculations
-    estimate_grid: bool = True,             # Auto-estimate grid size
-    nx: int = None,                         # Manual grid size X (if not estimating)
-    ny: int = None,                         # Manual grid size Y
-    nz: int = None,                         # Manual grid size Z
-    upsample_factor: float = 2.0,           # Grid upsampling factor
-    keep_fft_result: bool = True            # Keep FFT results in memory
+# Or compute only enhanced metrics (5-9x faster)
+enhanced_metrics = builder.compute_enhanced_metrics(
+    metrics_to_run=['spectral_slope', 'spectral_entropy', 'anisotropy']
 )
 ```
 
-#### Process Map Parameters
+## Performance Benchmarks
 
-```python
-process_map(
-    # K-space mask parameters
-    n_centers: int = 3,           # Number of spherical masks
-    radius: float = 0.5,          # Mask radius (0 to 1)
-    random_seed: int = None,      # Seed for random mask centers
-    
-    # Analysis parameters
-    analyses_to_run: List[str] = [
-        'magnitude',              # Basic magnitude analysis
-        'phase',                  # Phase analysis
-        'local_variance',         # Local spatial variance
-        'temporal_diff',          # Temporal differences
-        'spectral_slope',         # Spectral slope (enhanced)
-        'spectral_entropy',       # Spectral entropy (enhanced)
-        'anisotropy'             # Spatial anisotropy (enhanced)
-    ],
-    
-    # Additional parameters
-    k_neighbors_local_var: int = 5,  # k for local variance
-    save_format: str = 'hdf5'        # Output format
-)
+The package includes a comprehensive benchmarking system in the `benchmarks/` directory:
+
+```bash
+# Compare enhanced-only vs full pipeline (4-9x speedup)
+python benchmarks/benchmark_enhanced_only.py
+
+# Test analytical gradient performance (1.4-2.3x speedup)
+python benchmarks/benchmark_analytical_gradient.py
+
+# Evaluate with extremely large datasets
+python benchmarks/benchmark_extreme_gradient.py
 ```
 
-### Scale Examples
+See [benchmarks/README.md](benchmarks/README.md) for detailed information on all available benchmarks and how to interpret the results.
 
-The package has been tested with various data scales:
+## Documentation
 
-1. **Small Scale** (~2MB total output)
-```python
-n_points = 1000
-n_times = 5
-# Processing time: ~1-2 seconds
-```
+- [HOW-TO.md](./HOW-TO.md): Detailed installation and usage guide
+- [Technical Reference](docs/technical_reference.md): In-depth explanation of algorithms and methods
+- [Enhanced Features Guide](docs/enhanced_features_guide.md): Advanced features documentation
 
-2. **Medium Scale** (~18MB total output)
-```python
-n_points = 5000
-n_times = 10
-# Processing time: ~5-10 seconds
-```
+## Output Structure
 
-3. **Large Scale** (~1.7GB total output)
-```python
-n_points = 50000
-n_times = 100
-# Processing time: ~88 seconds
-```
+The package generates three HDF5 files for each subject:
 
-4. **Extra Large Scale** (~6.6GB total output)
-```python
-n_points = 100000
-n_times = 200
-# Processing time: ~24 minutes
-```
+1. **data.h5**: Raw computational results (FFT, masks, inverse maps)
+2. **analysis.h5**: Analysis results (magnitude, phase, variance, etc.)
+3. **enhanced.h5**: Advanced metrics (spectral slope, entropy, anisotropy, etc.)
 
-### Output Structure
+## Developer Information
 
-The pipeline generates three HDF5 files in the output directory:
+**Developer:** Dilanjan DK  
+**Contact:** ddiyabal@uwo.ca
 
-1. `data.h5`: Raw computational results
-   - Forward FFT results
-   - K-space masks
-   - Inverse maps
-   - Gradient maps
+## License
 
-2. `analysis.h5`: Analysis results
-   - Magnitude and phase calculations
-   - Local variance metrics
-   - Temporal difference calculations
-   - Analysis summary group
+This package is private and copyrighted. All rights reserved.
 
-3. `enhanced.h5`: Enhanced feature results (if enabled)
-   - Spectral metrics (slope, entropy)
-   - Analytical gradient maps
-   - Higher-order moments
-   - Excitation maps
+---
 
-### Memory Requirements
-
-Memory usage scales with data size:
-- Small scale (1K points, 5 times): ~100MB RAM
-- Medium scale (5K points, 10 times): ~500MB RAM
-- Large scale (50K points, 100 times): ~4GB RAM
-- Extra large scale (100K points, 200 times): ~16GB RAM
-
-### Storage Requirements
-
-Output file sizes vary with data scale:
-- Small scale: ~2MB total
-- Medium scale: ~18MB total
-- Large scale: ~1.7GB total
-- Extra large scale: ~6.6GB total
-
-### Performance Tips
-
-1. **Memory Optimization**
-   - Use `dtype='complex64'` for smaller memory footprint
-   - Set `keep_fft_result=False` if memory limited
-   - Enable HDF5 compression for storage efficiency
-
-2. **Computation Speed**
-   - Use analytical gradient method for faster processing
-   - Adjust `eps` parameter for precision vs. speed
-   - Consider parallel processing for multiple subjects
-
-3. **Storage Efficiency**
-   - Use HDF5 compression (enabled by default)
-   - Clean up intermediate results if not needed
-   - Monitor disk space for large datasets
-
-## Normalization Functions
-
-The package provides several normalization methods for preprocessing your data before FFT analysis.
-
-### Basic Usage
-
-```python
-from QM_FFT_Analysis.utils.preprocessing import (
-    get_normalized_wavefunctions_at_times,
-    normalize_time_series,
-    normalize_complex_data
-)
-
-# 1. Time Series Normalization
-time_series_data = np.random.randn(n_sources, n_time_points)
-normalized_data = normalize_time_series(
-    time_series=time_series_data,
-    time_axis=1,
-    method='zscore'  # Options: 'zscore', 'minmax', 'robust'
-)
-
-# 2. Complex Data Normalization
-complex_data = np.random.randn(n_points) + 1j * np.random.randn(n_points)
-normalized_complex = normalize_complex_data(
-    data=complex_data,
-    method='unit_power',  # Options: 'unit_power', 'unit_magnitude'
-    preserve_phase=True
-)
-
-# 3. Wavefunction Normalization (Multiple Time Points)
-normalized_wavefunctions = get_normalized_wavefunctions_at_times(
-    time_series_data=time_series_data,
-    time_indices=[50, 100, 150],  # Specific time points to analyze
-    time_axis=1,
-    source_axis=0,
-    normalization_method='zscore',
-    complex_normalization='unit_power'
-)
-```
-
-### Available Normalization Methods
-
-#### 1. Time Series Normalization
-```python
-def normalize_time_series(
-    time_series: np.ndarray,
-    time_axis: int = 1,
-    method: str = 'zscore',
-    robust: bool = False,
-    eps: float = 1e-10
-) -> np.ndarray:
-    """
-    Normalize time series data.
-    
-    Parameters:
-    -----------
-    time_series : array-like
-        Input time series data (n_sources × n_time_points)
-    time_axis : int
-        Axis corresponding to time dimension
-    method : str
-        'zscore': (x - mean) / std
-        'minmax': (x - min) / (max - min)
-        'robust': (x - median) / IQR
-    robust : bool
-        Use robust statistics (median/IQR instead of mean/std)
-    eps : float
-        Small constant to avoid division by zero
-        
-    Returns:
-    --------
-    normalized_data : np.ndarray
-        Normalized time series data
-    """
-```
-
-#### 2. Complex Data Normalization
-```python
-def normalize_complex_data(
-    data: np.ndarray,
-    method: str = 'unit_power',
-    preserve_phase: bool = True,
-    eps: float = 1e-10
-) -> np.ndarray:
-    """
-    Normalize complex-valued data.
-    
-    Parameters:
-    -----------
-    data : array-like
-        Complex input data
-    method : str
-        'unit_power': normalize to unit power
-        'unit_magnitude': normalize to unit magnitude
-    preserve_phase : bool
-        Whether to preserve phase information
-    eps : float
-        Small constant to avoid division by zero
-        
-    Returns:
-    --------
-    normalized_data : np.ndarray
-        Normalized complex data
-    """
-```
-
-#### 3. Wavefunction Normalization
-```python
-def get_normalized_wavefunctions_at_times(
-    time_series_data: np.ndarray,
-    time_indices: List[int],
-    time_axis: int = 1,
-    source_axis: int = 0,
-    normalization_method: str = 'zscore',
-    complex_normalization: str = 'unit_power'
-) -> np.ndarray:
-    """
-    Extract and normalize data at specific time points.
-    
-    Parameters:
-    -----------
-    time_series_data : array-like
-        Input time series data
-    time_indices : list of int
-        Time points to extract
-    time_axis : int
-        Axis corresponding to time
-    source_axis : int
-        Axis corresponding to sources
-    normalization_method : str
-        Method for time series normalization
-    complex_normalization : str
-        Method for complex data normalization
-        
-    Returns:
-    --------
-    normalized_wavefunctions : np.ndarray
-        Normalized data for selected time points
-    """
-```
-
-### Example Pipeline with Normalization
-
-```python
-import numpy as np
-from QM_FFT_Analysis.utils.preprocessing import get_normalized_wavefunctions_at_times
-from QM_FFT_Analysis.utils.map_builder import MapBuilder
-
-# 1. Generate or load your time series data
-n_sources = 50000
-n_time = 1000
-time_series_data = np.random.randn(n_sources, n_time)
-
-# 2. Select time points and normalize
-time_indices = np.linspace(0, n_time-1, 100, dtype=int)  # 100 evenly spaced points
-normalized_data = get_normalized_wavefunctions_at_times(
-    time_series_data=time_series_data,
-    time_indices=time_indices,
-    time_axis=1,
-    source_axis=0,
-    normalization_method='zscore',
-    complex_normalization='unit_power'
-)
-
-# 3. Initialize and run MapBuilder
-map_builder = MapBuilder(
-    subject_id='example',
-    output_dir='/path/to/output',
-    x=x_coordinates,
-    y=y_coordinates,
-    z=z_coordinates,
-    strengths=normalized_data,  # Already normalized
-    normalize_fft_result=True   # Additional FFT normalization
-)
-
-# 4. Run analysis
-map_builder.process_map(
-    n_centers=3,
-    radius=0.5,
-    analyses_to_run=['magnitude', 'phase', 'spectral_slope']
-)
-```
-
-### Normalization Best Practices
-
-1. **Time Series Data**
-   - Use 'zscore' for normally distributed data
-   - Use 'robust' for data with outliers
-   - Use 'minmax' when absolute scale is important
-
-2. **Complex Data**
-   - Use 'unit_power' for spectral analysis
-   - Use 'unit_magnitude' when only phase is important
-   - Set preserve_phase=True to maintain phase information
-
-3. **Pipeline Integration**
-   - Normalize time series before complex conversion
-   - Consider data distribution when choosing methods
-   - Monitor normalization effects on final results
-
-4. **Performance Considerations**
-   - Normalize in batches for large datasets
-   - Use float32 for memory efficiency
-   - Cache normalized results for repeated analyses
-
-## Pipeline Architecture
-
-### Complete Processing Pipeline
-
-```mermaid
-graph TB
-    %% Data Input and Preprocessing
-    Input[/"Input Data<br/>Time Series & Coordinates"/] --> Preprocess["Preprocessing<br/>(normalize_time_series)"]
-    Preprocess --> ComplexConv["Complex Conversion<br/>(normalize_complex_data)"]
-    ComplexConv --> WaveFn["Wavefunction Normalization<br/>(get_normalized_wavefunctions)"]
-    
-    %% MapBuilder Initialization
-    WaveFn --> Init["MapBuilder Initialization<br/>Grid Size Estimation"]
-    
-    %% Forward FFT
-    Init --> ForwardFFT["Forward FFT<br/>(FINUFFT Type 1)"]
-    ForwardFFT --> FFTNorm["FFT Normalization<br/>Probability Density"]
-    
-    %% K-Space Processing
-    FFTNorm --> KSpace["K-Space Processing"]
-    
-    subgraph "K-Space Operations"
-        KSpace --> |Generate|Masks["K-Space Masks"]
-        Masks --> |Spherical|Mask1["Mask 1"]
-        Masks --> |Spherical|Mask2["Mask 2"]
-        Masks --> |Custom|MaskN["Mask N"]
-    end
-    
-    %% Inverse Transform
-    Mask1 --> InvFFT["Inverse FFT<br/>(FINUFFT Type 2)"]
-    Mask2 --> InvFFT
-    MaskN --> InvFFT
-    
-    %% Analysis
-    InvFFT --> Analysis["Analysis Pipeline"]
-    
-    subgraph "Analysis Operations"
-        Analysis --> |Basic|Basic["Basic Metrics<br/>- Magnitude<br/>- Phase"]
-        Analysis --> |Enhanced|Enhanced["Enhanced Features<br/>- Spectral Metrics<br/>- Gradient Maps"]
-        Analysis --> |Statistical|Stats["Statistical Analysis<br/>- Local Variance<br/>- Temporal Diff"]
-    end
-    
-    %% Results Storage
-    Basic --> Storage["HDF5 Storage"]
-    Enhanced --> Storage
-    Stats --> Storage
-    
-    subgraph "Output Files"
-        Storage --> Data["data.h5<br/>Raw Results"]
-        Storage --> AnalysisOut["analysis.h5<br/>Analysis Results"]
-        Storage --> EnhancedOut["enhanced.h5<br/>Enhanced Features"]
-    end
-    
-    %% Styling
-    classDef process fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
-    classDef data fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
-    classDef storage fill:#fff3e0,stroke:#e65100,stroke-width:2px;
-    
-    class Input,Data,AnalysisOut,EnhancedOut data;
-    class Preprocess,ComplexConv,WaveFn,ForwardFFT,FFTNorm,KSpace,InvFFT,Analysis process;
-    class Storage storage;
-```
-
-### Data Flow Details
-
-1. **Input Processing**
-   - Time series data normalization
-   - Complex data conversion
-   - Wavefunction preparation
-
-2. **Forward Transform**
-   - Grid size estimation
-   - FINUFFT Type 1 transform
-   - Probability density normalization
-
-3. **K-Space Operations**
-   - Mask generation (spherical/custom)
-   - Frequency component selection
-   - Multi-scale analysis
-
-4. **Inverse Transform**
-   - FINUFFT Type 2 transform
-   - Multiple mask processing
-   - Parallel computation
-
-5. **Analysis Pipeline**
-   - Basic metrics computation
-   - Enhanced feature extraction
-   - Statistical analysis
-
-6. **Results Storage**
-   - HDF5 file organization
-   - Compression and optimization
-   - Structured data management
-
-## MapBuilder and Gradient Analysis
-
-### MapBuilder Class Architecture
-
-```mermaid
-classDiagram
-    class MapBuilder {
-        +str subject_id
-        +str output_dir
-        +ndarray x, y, z
-        +ndarray strengths
-        +bool enable_enhanced_features
-        +bool normalize_fft_result
-        
-        +__init__(subject_id, output_dir, x, y, z, strengths)
-        +compute_forward_fft()
-        +generate_kspace_masks(n_centers, radius)
-        +compute_inverse_maps()
-        +compute_gradient_maps()
-        +process_map()
-        -_estimate_grid_size()
-        -_normalize_fft_result()
-        -_setup_logging()
-    }
-
-    class DataManager {
-        +HDF5Manager hdf5_manager
-        +save_fft_result()
-        +save_masks()
-        +save_inverse_maps()
-        +save_gradient_maps()
-    }
-
-    class AnalysisManager {
-        +compute_magnitude()
-        +compute_phase()
-        +compute_local_variance()
-        +compute_enhanced_metrics()
-    }
-
-    MapBuilder --> DataManager : uses
-    MapBuilder --> AnalysisManager : uses
-```
-
-### Gradient Maps Computation Pipeline
-
-```mermaid
-graph TB
-    %% Input Data
-    InvMap[/"Inverse Maps<br/>(n_masks × n_times × n_points)"/] --> GradientChoice{"Gradient<br/>Method"}
-    
-    %% Method Selection
-    GradientChoice -->|Analytical| KSpace["K-Space Method"]
-    GradientChoice -->|Interpolation| Grid["Grid Method"]
-    
-    %% Analytical Method
-    subgraph "Analytical Gradient Computation"
-        KSpace --> |"1. Multiply by ik"|KDeriv["K-Space Derivatives<br/>∂/∂x, ∂/∂y, ∂/∂z"]
-        KDeriv --> |"2. Inverse FFT"|SpatialDeriv["Spatial Derivatives"]
-        SpatialDeriv --> |"3. Magnitude"|GradMagA["Gradient Magnitude<br/>√(|∂f/∂x|² + |∂f/∂y|² + |∂f/∂z|²)"]
-    end
-    
-    %% Interpolation Method
-    subgraph "Grid-Based Gradient Computation"
-        Grid --> |"1. Interpolate"|GridData["Regular Grid Data"]
-        GridData --> |"2. Finite Differences"|GridDeriv["Grid Derivatives"]
-        GridDeriv --> |"3. Magnitude"|GradMagG["Gradient Magnitude"]
-        GridDeriv --> |"4. Interpolate Back"|FinalGrad["Final Gradient"]
-    end
-    
-    %% Results Processing
-    GradMagA --> Results["Gradient Maps"]
-    FinalGrad --> Results
-    
-    %% Storage
-    Results --> |"Save to HDF5"|Storage["Enhanced Features<br/>enhanced.h5"]
-    
-    %% Performance Metrics
-    subgraph "Performance Comparison"
-        direction LR
-        Analytical["Analytical Method<br/>~2-5x faster"]
-        Interpolation["Interpolation Method<br/>More accurate for<br/>irregular points"]
-    end
-    
-    %% Styling
-    classDef input fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
-    classDef process fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px;
-    classDef output fill:#fff3e0,stroke:#e65100,stroke-width:2px;
-    
-    class InvMap input;
-    class KSpace,Grid,GridData,KDeriv,SpatialDeriv process;
-    class Results,Storage output;
-```
-
-### Gradient Computation Details
-
-1. **Analytical Method**
-   ```python
-   def compute_gradient_analytical(self, data):
-       """
-       Compute gradients directly in k-space
-       1. Forward FFT of inverse maps
-       2. Multiply by ik in each direction
-       3. Inverse FFT to get spatial derivatives
-       4. Compute magnitude
-       """
-       # Get k-space coordinates
-       kx, ky, kz = self._get_k_coordinates()
-       
-       # Forward FFT
-       fft_data = self.compute_forward_fft(data)
-       
-       # Compute derivatives in k-space
-       dx = self.compute_inverse_fft(1j * kx * fft_data)
-       dy = self.compute_inverse_fft(1j * ky * fft_data)
-       dz = self.compute_inverse_fft(1j * kz * fft_data)
-       
-       # Compute magnitude
-       return np.sqrt(np.abs(dx)**2 + np.abs(dy)**2 + np.abs(dz)**2)
-   ```
-
-2. **Grid Method**
-   ```python
-   def compute_gradient_interpolation(self, data):
-       """
-       Compute gradients using grid interpolation
-       1. Interpolate onto regular grid
-       2. Compute spatial derivatives
-       3. Interpolate back to original points
-       """
-       # Create regular grid
-       grid_x, grid_y, grid_z = np.meshgrid(
-           np.linspace(x.min(), x.max(), nx),
-           np.linspace(y.min(), y.max(), ny),
-           np.linspace(z.min(), z.max(), nz)
-       )
-       
-       # Interpolate data to grid
-       grid_data = griddata(
-           (x, y, z), data,
-           (grid_x, grid_y, grid_z),
-           method='cubic'
-       )
-       
-       # Compute derivatives
-       dx = np.gradient(grid_data, grid_x[0,:,0], axis=0)
-       dy = np.gradient(grid_data, grid_y[:,0,0], axis=1)
-       dz = np.gradient(grid_data, grid_z[0,0,:], axis=2)
-       
-       # Compute magnitude
-       grad_mag = np.sqrt(dx**2 + dy**2 + dz**2)
-       
-       # Interpolate back to original points
-       return griddata(
-           (grid_x.flatten(), grid_y.flatten(), grid_z.flatten()),
-           grad_mag.flatten(),
-           (x, y, z),
-           method='cubic'
-       )
-   ```
+For detailed usage examples and performance optimization tips, see the [HOW-TO.md](./HOW-TO.md) guide.
