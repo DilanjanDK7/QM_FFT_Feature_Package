@@ -966,6 +966,83 @@ class MapBuilder:
             
         return self.analysis_results
 
+    def process_enhanced_metrics(self, metrics_to_run=None, n_centers=0, radius=0.5, skip_masks=False):
+        """Run only the enhanced metrics calculation without standard analysis pipeline.
+        
+        This method allows computing enhanced metrics directly without running the 
+        standard analysis (magnitude, phase, etc.). It still performs the necessary
+        steps like forward FFT and optionally mask generation.
+        
+        Args:
+            metrics_to_run (list, optional): List of enhanced metrics to compute. If None, computes all.
+                Options: 'spectral_slope', 'spectral_entropy', 'anisotropy', 'higher_moments', 'excitation'.
+            n_centers (int, optional): Number of spherical mask centers for k-space masks. Defaults to 0.
+                If set to 0, no new masks will be generated (relies on existing masks or skips mask-dependent metrics).
+            radius (float, optional): Radius of spherical masks. Defaults to 0.5.
+            skip_masks (bool, optional): If True, skips inverse map calculation and mask-dependent metrics.
+                This is useful for metrics that only need the forward FFT (spectral_slope, spectral_entropy, anisotropy).
+                Defaults to False.
+                
+        Returns:
+            dict: Dictionary of computed enhanced metrics.
+            
+        Note:
+            - Requires enable_enhanced_features=True during initialization.
+            - For metrics that require inverse maps (e.g., higher_moments), skip_masks must be False.
+            - If the forward FFT hasn't been computed yet, it will be computed automatically.
+        """
+        if not self.enable_enhanced_features:
+            self.logger.error("Enhanced features are not enabled. Initialize with enable_enhanced_features=True.")
+            return {}
+            
+        if not _ENHANCED_FEATURES_AVAILABLE:
+            self.logger.error("Enhanced features module not available.")
+            return {}
+        
+        # Default metrics if None provided
+        if metrics_to_run is None:
+            metrics_to_run = ['spectral_slope', 'spectral_entropy', 'anisotropy']
+            # Add excitation if we have enough time points
+            if self.n_trans >= 3:
+                metrics_to_run.append('excitation')
+        
+        # Filter out mask-dependent metrics if skipping masks
+        if skip_masks:
+            # Check if any mask-dependent metrics were requested
+            mask_dependent_metrics = ['higher_moments']
+            requested_mask_metrics = [m for m in metrics_to_run if m in mask_dependent_metrics]
+            
+            if requested_mask_metrics:
+                self.logger.warning(f"Skip_masks=True but mask-dependent metrics requested: {requested_mask_metrics}. These will be skipped.")
+                metrics_to_run = [m for m in metrics_to_run if m not in mask_dependent_metrics]
+        
+        # Compute forward FFT if not already computed
+        if self.fft_result is None:
+            self.logger.info("Forward FFT not found. Computing forward FFT.")
+            self.compute_forward_fft()
+        
+        # Generate masks and compute inverse maps if needed for any metrics
+        if not skip_masks and 'higher_moments' in metrics_to_run:
+            # Check if we have any masks or need to generate them
+            if not self.kspace_masks and n_centers > 0:
+                self.logger.info(f"Generating {n_centers} k-space masks for inverse map calculation.")
+                self.generate_kspace_masks(n_centers=n_centers, radius=radius)
+            
+            # If we still don't have masks, warn and remove mask-dependent metrics
+            if not self.kspace_masks:
+                self.logger.warning("No k-space masks available. Skipping metrics that require inverse maps.")
+                metrics_to_run = [m for m in metrics_to_run if m != 'higher_moments']
+            # If we have masks but not inverse maps, compute them
+            elif not self.inverse_maps:
+                self.logger.info("Computing inverse maps for mask-dependent metrics.")
+                self.compute_inverse_maps()
+        
+        # Compute the requested enhanced metrics
+        self.logger.info(f"Computing enhanced metrics: {metrics_to_run}")
+        enhanced_results = self.compute_enhanced_metrics(metrics_to_run=metrics_to_run)
+        
+        return enhanced_results
+
     def process_map(self, n_centers=1, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5,
                   use_analytical_gradient=None, calculate_local_variance=False):
         """Run the main processing steps: FFT, masks, inverse, gradients, and analysis.

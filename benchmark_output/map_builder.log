@@ -1,0 +1,68 @@
+2025-04-24 11:38:25,817 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Enhanced features enabled with configuration
+2025-04-24 11:38:25,817 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Initialized with n_trans = 15
+2025-04-24 11:38:25,817 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Initialized with n_trans = 15, n_points = 10000
+2025-04-24 11:38:25,817 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Estimated grid dimensions (nx, ny, nz): (44, 44, 44) based on 10000 points
+2025-04-24 11:38:25,860 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - FINUFFT plans initialized
+2025-04-24 11:38:25,860 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - MapBuilder initialized successfully
+2025-04-24 11:38:25,860 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Enhanced features are enabled
+2025-04-24 11:38:26,231 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Forward FFT computed and saved
+2025-04-24 11:38:26,232 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Generating 2 spherical k-space masks with radius 0.5
+2025-04-24 11:38:26,232 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Generated spherical mask 0 centered near (np.float32(0.27272728), np.float32(-0.3181818), np.float32(0.25)) and saved to <HDF5 dataset "kspace_mask_0": shape (44, 44, 44), type "|b1">
+2025-04-24 11:38:26,232 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Generated spherical mask 1 centered near (np.float32(0.29545453), np.float32(-0.45454547), np.float32(0.022727273)) and saved to <HDF5 dataset "kspace_mask_1": shape (44, 44, 44), type "|b1">
+2025-04-24 11:38:26,232 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Total k-space masks generated: 2
+2025-04-24 11:38:26,389 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computed inverse maps for 2 masks, each with 15 transforms.
+2025-04-24 11:38:26,389 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-24 11:38:31,768 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-24 11:38:37,375 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-24 11:38:37,375 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computed gradient maps for 2 maps, each with 15 transforms, using optimized interpolation.
+2025-04-24 11:38:37,377 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-24 11:38:42,811 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-24 11:38:48,515 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-24 11:38:48,515 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computed gradient maps for 2 maps, each with 15 transforms, using optimized interpolation.
+2025-04-24 11:38:48,516 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-24 11:38:54,214 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-24 11:38:59,879 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-24 11:38:59,879 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computed gradient maps for 2 maps, each with 15 transforms, using optimized interpolation.
+2025-04-24 11:38:59,880 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-24 11:39:05,607 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-24 11:39:11,346 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-24 11:39:11,346 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computed gradient maps for 2 maps, each with 15 transforms, using optimized interpolation.
+2025-04-24 11:39:11,348 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-24 11:39:17,098 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-24 11:39:22,863 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-24 11:39:22,864 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computed gradient maps for 2 maps, each with 15 transforms, using optimized interpolation.
+2025-04-24 11:39:22,865 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computing gradient maps for 2 inverse maps using optimized interpolation.
+2025-04-24 11:39:28,471 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 0 computed and saved after interpolation.
+2025-04-24 11:39:33,874 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Gradient map 1 computed and saved after interpolation.
+2025-04-24 11:39:33,874 - MapBuilder_benchmark_gradient_std_10000_15 - INFO - Computed gradient maps for 2 maps, each with 15 transforms, using optimized interpolation.
+2025-04-24 11:39:33,876 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Enhanced features enabled with configuration
+2025-04-24 11:39:33,876 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Initialized with n_trans = 15
+2025-04-24 11:39:33,876 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Initialized with n_trans = 15, n_points = 10000
+2025-04-24 11:39:33,877 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Estimated grid dimensions (nx, ny, nz): (44, 44, 44) based on 10000 points
+2025-04-24 11:39:33,918 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - FINUFFT plans initialized
+2025-04-24 11:39:33,918 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - MapBuilder initialized successfully
+2025-04-24 11:39:33,918 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Enhanced features are enabled
+2025-04-24 11:39:34,292 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Forward FFT computed and saved
+2025-04-24 11:39:34,292 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Generating 2 spherical k-space masks with radius 0.5
+2025-04-24 11:39:34,293 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Generated spherical mask 0 centered near (np.float32(-0.18181819), np.float32(-0.09090909), np.float32(-0.18181819)) and saved to <HDF5 dataset "kspace_mask_0": shape (44, 44, 44), type "|b1">
+2025-04-24 11:39:34,293 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Generated spherical mask 1 centered near (np.float32(-0.5), np.float32(0.36363637), np.float32(-0.4318182)) and saved to <HDF5 dataset "kspace_mask_1": shape (44, 44, 44), type "|b1">
+2025-04-24 11:39:34,293 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Total k-space masks generated: 2
+2025-04-24 11:39:34,449 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computed inverse maps for 2 masks, each with 15 transforms.
+2025-04-24 11:39:34,449 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computing gradient maps using analytical method (enhanced feature).
+2025-04-24 11:39:34,449 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computing analytical gradient maps for 2 masks
+2025-04-24 11:39:37,766 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Analytical gradient map 0 computed and saved
+2025-04-24 11:39:40,928 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Analytical gradient map 1 computed and saved
+2025-04-24 11:39:40,928 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computed analytical gradient maps for 2 masks
+2025-04-24 11:39:40,929 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computing gradient maps using analytical method (enhanced feature).
+2025-04-24 11:39:40,929 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computing analytical gradient maps for 2 masks
+2025-04-24 11:39:44,100 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Analytical gradient map 0 computed and saved
+2025-04-24 11:39:47,255 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Analytical gradient map 1 computed and saved
+2025-04-24 11:39:47,255 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computed analytical gradient maps for 2 masks
+2025-04-24 11:39:47,256 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computing gradient maps using analytical method (enhanced feature).
+2025-04-24 11:39:47,256 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computing analytical gradient maps for 2 masks
+2025-04-24 11:39:50,381 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Analytical gradient map 0 computed and saved
+2025-04-24 11:39:53,545 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Analytical gradient map 1 computed and saved
+2025-04-24 11:39:53,545 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computed analytical gradient maps for 2 masks
+2025-04-24 11:39:53,546 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computing gradient maps using analytical method (enhanced feature).
+2025-04-24 11:39:53,546 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Computing analytical gradient maps for 2 masks
+2025-04-24 11:39:56,922 - MapBuilder_benchmark_gradient_ana_10000_15 - INFO - Analytical gradient map 0 computed and saved
