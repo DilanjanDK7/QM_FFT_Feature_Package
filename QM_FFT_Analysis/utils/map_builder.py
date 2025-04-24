@@ -832,7 +832,7 @@ class MapBuilder:
         return enhanced_results
         
     def analyze_inverse_maps(self, analyses_to_run=['magnitude', 'phase'], k_neighbors=5, save_format='hdf5',
-                            compute_enhanced=None, calculate_local_variance=False):
+                            compute_enhanced=None, enable_local_variance=False):
         """Analyze inverse maps using various metrics.
         
         Args:
@@ -840,7 +840,7 @@ class MapBuilder:
             k_neighbors (int): Number of neighbors for local variance calculation
             save_format (str): Format for saving results ('hdf5' or 'npz')
             compute_enhanced (bool): Whether to compute enhanced metrics
-            calculate_local_variance (bool): Whether to calculate local variance (computationally expensive)
+            enable_local_variance (bool): Whether to calculate local variance (computationally expensive)
         """
         self.logger.info(f"Starting analysis of {len(self.inverse_maps)} inverse maps. Analyses requested: {analyses_to_run}")
         
@@ -872,13 +872,13 @@ class MapBuilder:
                 self.logger.debug(f"Computed and saved phase for {map_name_base}")
 
             # Only calculate local variance if explicitly requested via parameter
-            if 'local_variance' in standard_analyses and calculate_local_variance:
+            if 'local_variance' in standard_analyses and enable_local_variance:
                 points_nu = np.stack((self.x_coords_1d, self.y_coords_1d, self.z_coords_1d), axis=-1)
                 local_var = calculate_local_variance(inv_map_nu, points_nu, k=k_neighbors)
                 analysis_set[f'local_variance_k{k_neighbors}'] = local_var
                 self._save_to_hdf5(self.analysis_file, f"{map_name_base}_local_variance_k{k_neighbors}", local_var)
                 self.logger.debug(f"Computed and saved local variance (k={k_neighbors}) for {map_name_base}")
-            elif 'local_variance' in standard_analyses and not calculate_local_variance:
+            elif 'local_variance' in standard_analyses and not enable_local_variance:
                 self.logger.info(f"Skipping local variance calculation for {map_name_base} (disabled by default)")
 
             # --- Corrected Temporal Difference Logic --- 
@@ -974,6 +974,7 @@ class MapBuilder:
                 If None, uses the value from config if enhanced features enabled.
             calculate_local_variance (bool, optional): Whether to calculate local variance.
                 Defaults to False as it is computationally expensive.
+                This parameter is passed as enable_local_variance to analyze_inverse_maps.
         """
         self.compute_forward_fft()
         self.generate_kspace_masks(n_centers=n_centers, radius=radius)
@@ -985,7 +986,7 @@ class MapBuilder:
                                        'higher_moments', 'excitation'] for a in analyses_to_run)
                                        
         self.analyze_inverse_maps(analyses_to_run=analyses_to_run, k_neighbors=k_neighbors_local_var,
-                                 calculate_local_variance=calculate_local_variance)
+                                 enable_local_variance=calculate_local_variance)
 
         self.logger.info("Map processing pipeline complete.")
 

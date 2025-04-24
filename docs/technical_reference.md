@@ -910,8 +910,8 @@ classDiagram
         +generate_kspace_masks(n_centers, radius)
         +compute_inverse_maps()
         +compute_gradient_maps(method)
-        +analyze_inverse_maps(analyses)
-        +process_map(config)
+        +analyze_inverse_maps(analyses, k_neighbors, save_format, compute_enhanced, enable_local_variance)
+        +process_map(n_centers, radius, analyses, k_neighbors, use_analytical_gradient, calculate_local_variance)
         
         %% Private Methods
         -_validate_inputs()
@@ -1087,7 +1087,7 @@ graph TB
 ### FINUFFT Citations
 1. Barnett, A. H., Magland, J., & af Klinteberg, L. (2019). A Parallel Nonuniform Fast Fourier Transform Library Based on an "Exponential of Semicircle" Kernel. SIAM Journal on Scientific Computing, 41(5), C479–C504. https://doi.org/10.1137/18M1173014 ([arXiv version](https://arxiv.org/abs/1808.06736))
 
-2. Barnett, A. H. (2021). Aliasing error of the exp⁡(β√(1-z²)) kernel in the nonuniform fast Fourier transform. Applied and Computational Harmonic Analysis, 51, 1-16. https://doi.org/10.1016/j.acha.2020.08.007 ([arXiv version](https://arxiv.org/abs/1910.00850))
+2. Barnett, A. H. (2021). Aliasing error of the exp⁡(β√(1-z²)) kernel in the nonuniform fast Fourier transform. Applied and Computational Harmonic Analysis, 51, 1–16. https://doi.org/10.1016/j.acha.2020.08.007 ([arXiv version](https://arxiv.org/abs/1910.00850))
 
 3. Shih, Y.-H., Wright, G., Andén, J., Blaschke, J., & Barnett, A. H. (2021). cuFINUFFT: a load-balanced GPU library for general-purpose nonuniform FFTs. PDSEC2021 workshop of the IPDPS2021 conference. ([arXiv version](https://arxiv.org/abs/2102.08463))
 

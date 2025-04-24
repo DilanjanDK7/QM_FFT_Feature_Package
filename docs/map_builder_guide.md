@@ -113,13 +113,13 @@ The following methods generate boolean masks (shape `(nx, ny, nz)`) representing
 *   Stores the results (list of arrays, each shape `(n_trans, nx, ny, nz)`) in `self.gradient_maps`.
 *   Saves each gradient map to `data/gradient_map_{i}.npy`.
 
-### `analyze_inverse_maps(analyses_to_run=['magnitude', 'phase'], k_neighbors=5, save_format='hdf5')`
+### `analyze_inverse_maps(analyses_to_run=['magnitude', 'phase'], k_neighbors=5, save_format='hdf5', compute_enhanced=None, enable_local_variance=False)`
 
 *   Performs selected analyses directly on the non-uniform inverse maps (`self.inverse_maps`).
 *   `analyses_to_run` (list): Specifies which analyses to perform. Options:
     *   `'magnitude'`: Computes `np.abs(inverse_map)`. Saved as `analysis/map_{i}_magnitude.npy`.
     *   `'phase'`: Computes `np.angle(inverse_map)`. Saved as `analysis/map_{i}_phase.npy`.
-    *   `'local_variance'`: Computes the variance of the magnitude within the `k_neighbors` nearest neighbors for each point. Requires `scipy`. Saved as `analysis/map_{i}_local_variance_k{k}.npy`.
+    *   `'local_variance'`: Computes the variance of the magnitude within the `k_neighbors` nearest neighbors for each point. Requires `scipy`. Saved as `analysis/map_{i}_local_variance_k{k}.npy`. **Note:** `enable_local_variance` must be set to `True` for this analysis to run, even if it's included in `analyses_to_run`.
     *   `'temporal_diff_magnitude'`: Computes the difference in magnitude between consecutive transforms (`t` and `t-1`). Requires `n_trans >= 2`. Saved as `analysis/map_{i}_temporal_diff_magnitude.npy`.
     *   `'temporal_diff_phase'`: Computes the difference in phase between consecutive transforms. Requires `n_trans >= 2`. Saved as `analysis/map_{i}_temporal_diff_phase.npy`.
 *   `k_neighbors` (int): The number of neighbors `k` to use for the `local_variance` calculation (default: `5`).
@@ -127,6 +127,8 @@ The following methods generate boolean masks (shape `(nx, ny, nz)`) representing
     *   `'hdf5'`: Saves the entire `self.analysis_results` dictionary structure into a single HDF5 file named `analysis/analysis_summary.h5`. This provides a convenient way to store all analysis outputs together.
     *   `'npz'`: Skips saving the summary file. Logs a message indicating that individual `.npy` files were saved and the calling script is responsible for creating any summary files (e.g., `.npz`).
     *   Other values: Logs a warning and does not save a summary file.
+*   `compute_enhanced` (bool, optional): Whether to compute enhanced metrics if available (default: `None`). If `None`, uses the value from `self.enable_enhanced_features`.
+*   `enable_local_variance` (bool, optional): Whether to calculate local variance (default: `False`). Set to `True` to enable this computationally expensive calculation when 'local_variance' is in `analyses_to_run`.
 *   Stores results in the `self.analysis_results` dictionary, keyed by map index (e.g., `'map_0'`) and analysis type (e.g., `'magnitude'`).
 *   **Important:** Regardless of `save_format`, each calculated analysis result (magnitude, phase, etc.) is **always** saved to its individual `.npy` file in the `analysis/` subdirectory.
 
@@ -137,17 +139,23 @@ The following methods generate boolean masks (shape `(nx, ny, nz)`) representing
 *   Saves the plot as an HTML file in the `plots/` directory.
 *   *Note:* This currently needs manual calls if you want plots for specific outputs or transforms.
 
-### `process_map(n_centers=2, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5)`
+### `process_map(n_centers=1, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5, use_analytical_gradient=None, calculate_local_variance=False)`
 
 *   Orchestrates the main pipeline:
     1.  `compute_forward_fft()`
     2.  `generate_kspace_masks(n_centers, radius)` (Note: Only calls the spherical mask generator by default)
     3.  `compute_inverse_maps()`
-    4.  `compute_gradient_maps()`
-    5.  `analyze_inverse_maps(analyses_to_run, k_neighbors_local_var)`
+    4.  `compute_gradient_maps(use_analytical_method=use_analytical_gradient)`
+    5.  `analyze_inverse_maps(analyses_to_run, k_neighbors=k_neighbors_local_var, enable_local_variance=calculate_local_variance)`
 *   Provides a convenient way to run the standard sequence of operations **with spherical masks**.
 *   If you want to use cubic, slice, or slab masks, you should typically call the specific generation methods *before* calling `process_map` (and potentially set `n_centers=0` if you don't want additional spherical masks), or call the steps individually.
-*   Accepts parameters to control mask generation (`n_centers`, `radius`) and the analyses to run (`analyses_to_run`, `k_neighbors_local_var`).
+*   Parameters:
+    *   `n_centers` (int): Number of spherical mask centers (default: `1`).
+    *   `radius` (float): Radius of spherical masks (default: `0.5`).
+    *   `analyses_to_run` (list): Analyses to run (default: `['magnitude']`).
+    *   `k_neighbors_local_var` (int): k for local variance calculation (default: `5`).
+    *   `use_analytical_gradient` (bool): Whether to use analytical gradient calculation. If `None`, uses the value from config if enhanced features are enabled (default: `None`).
+    *   `calculate_local_variance` (bool): Whether to calculate local variance. This is passed as `enable_local_variance` to `analyze_inverse_maps` (default: `False`).
 
 ## Attributes
 
