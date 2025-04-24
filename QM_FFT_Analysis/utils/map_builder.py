@@ -866,8 +866,16 @@ class MapBuilder:
         return enhanced_results
         
     def analyze_inverse_maps(self, analyses_to_run=['magnitude', 'phase'], k_neighbors=5, save_format='hdf5',
-                            compute_enhanced=None):
-        """Analyze inverse maps using various metrics."""
+                            compute_enhanced=None, calculate_local_variance=False):
+        """Analyze inverse maps using various metrics.
+        
+        Args:
+            analyses_to_run (list): List of analyses to run (magnitude, phase, temporal_diff_magnitude, etc.)
+            k_neighbors (int): Number of neighbors for local variance calculation
+            save_format (str): Format for saving results ('hdf5' or 'npz')
+            compute_enhanced (bool): Whether to compute enhanced metrics
+            calculate_local_variance (bool): Whether to calculate local variance (computationally expensive)
+        """
         self.logger.info(f"Starting analysis of {len(self.inverse_maps)} inverse maps. Analyses requested: {analyses_to_run}")
         
         # Determine which analyses to run
@@ -897,12 +905,15 @@ class MapBuilder:
                 self._save_to_hdf5(self.analysis_file, f"{map_name_base}_phase", phase)
                 self.logger.debug(f"Computed and saved phase for {map_name_base}")
 
-            if 'local_variance' in standard_analyses:
+            # Only calculate local variance if explicitly requested via parameter
+            if 'local_variance' in standard_analyses and calculate_local_variance:
                 points_nu = np.stack((self.x_coords_1d, self.y_coords_1d, self.z_coords_1d), axis=-1)
                 local_var = calculate_local_variance(inv_map_nu, points_nu, k=k_neighbors)
                 analysis_set[f'local_variance_k{k_neighbors}'] = local_var
                 self._save_to_hdf5(self.analysis_file, f"{map_name_base}_local_variance_k{k_neighbors}", local_var)
                 self.logger.debug(f"Computed and saved local variance (k={k_neighbors}) for {map_name_base}")
+            elif 'local_variance' in standard_analyses and not calculate_local_variance:
+                self.logger.info(f"Skipping local variance calculation for {map_name_base} (disabled by default)")
 
             # --- Corrected Temporal Difference Logic --- 
             run_td_mag = 'temporal_diff_magnitude' in standard_analyses
@@ -985,7 +996,7 @@ class MapBuilder:
         return self.analysis_results
 
     def process_map(self, n_centers=1, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5,
-                  use_analytical_gradient=None, skip_interpolation=True):
+                  use_analytical_gradient=None, calculate_local_variance=False, skip_interpolation=True):
         """Run the main processing steps: FFT, masks, inverse, gradients, and analysis.
         
         Args:
@@ -995,6 +1006,8 @@ class MapBuilder:
             k_neighbors_local_var (int, optional): k for local variance. Defaults to 5.
             use_analytical_gradient (bool, optional): Whether to use analytical gradient.
                 If None, uses the value from config if enhanced features enabled.
+            calculate_local_variance (bool, optional): Whether to calculate local variance.
+                Defaults to False as it is computationally expensive.
             skip_interpolation (bool, optional): Whether to skip interpolation to regular grid.
                 When True, only non-uniform data is stored, which significantly improves performance.
                 Default is True.
@@ -1008,7 +1021,8 @@ class MapBuilder:
         enhanced_requested = any(a in ['spectral_slope', 'spectral_entropy', 'anisotropy', 
                                        'higher_moments', 'excitation'] for a in analyses_to_run)
                                        
-        self.analyze_inverse_maps(analyses_to_run=analyses_to_run, k_neighbors=k_neighbors_local_var)
+        self.analyze_inverse_maps(analyses_to_run=analyses_to_run, k_neighbors=k_neighbors_local_var,
+                                 calculate_local_variance=calculate_local_variance)
 
         self.logger.info("Map processing pipeline complete.")
 
