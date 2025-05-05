@@ -216,7 +216,7 @@ class MapBuilder:
         elif isinstance(data, np.ndarray):
             # Convert data to float16 if it's a real-valued array
             if np.isrealobj(data):
-                data = data.astype(np.float16)
+                data = data.astype(np.float32)
             # Save NumPy array directly
             file_or_group.create_dataset(name, data=data, compression=compression, compression_opts=compression_opts)
         else:
@@ -226,7 +226,7 @@ class MapBuilder:
                 serializable_data = np.array(data) 
                 # Convert to float16 if it's a real-valued array
                 if np.isrealobj(serializable_data):
-                    serializable_data = serializable_data.astype(np.float16)
+                    serializable_data = serializable_data.astype(np.float32)
                 # Check if conversion resulted in object dtype (often indicates mixed types or unhandled objects)
                 if serializable_data.dtype == object:
                     # Fallback to string if it's an object array
