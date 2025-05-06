@@ -123,6 +123,85 @@ print(f"Processing complete. Results saved in: {map_builder.output_dir / subject
 # print("Shape of first gradient map:", map_builder.gradient_maps[0].shape)
 # print("Analysis results for map 0:", map_builder.analysis_results.get('map_0', {}).keys())
 
+## Using the Standalone Analytical Gradient Function
+
+If you only need to compute the analytical radial gradient directly, without using the full MapBuilder pipeline, you can use the standalone function:
+
+```python
+import numpy as np
+from pathlib import Path
+from QM_FFT_Analysis.utils import calculate_analytical_gradient
+
+# 1. Define Inputs
+subject_id = "gradient_example_01"
+output_dir = Path("./gradient_output") 
+
+# --- Generate sample data ---
+n_points = 1000  # Number of non-uniform points
+n_trans = 5      # Number of time points or transforms
+
+# Non-uniform coordinates
+x = np.random.uniform(-np.pi, np.pi, n_points)
+y = np.random.uniform(-np.pi, np.pi, n_points)
+z = np.random.uniform(-np.pi, np.pi, n_points)
+
+# Complex strengths (for example, a simple Gaussian function)
+r = np.sqrt(x**2 + y**2 + z**2)
+strengths_base = np.exp(-r**2)  # Base pattern
+
+# Create multiple time points with variations
+strengths = np.zeros((n_trans, n_points), dtype=np.complex128)
+for t in range(n_trans):
+    # Add time-dependent variations
+    phase_shift = np.exp(1j * t * r / 2)
+    strengths[t] = strengths_base * phase_shift
+
+# 2. Calculate the analytical gradient
+print(f"Calculating analytical gradient for {subject_id}...")
+results = calculate_analytical_gradient(
+    x=x, y=y, z=z, 
+    strengths=strengths,
+    subject_id=subject_id,
+    output_dir=output_dir,
+    # Optional parameters with their defaults:
+    # estimate_grid=True,       # Auto-estimate grid size
+    # upsampling_factor=2.0,    # For grid estimation
+    # average=True,             # Calculate time average
+    # export_nifti=False,       # Export to NIfTI format
+)
+
+# 3. Access Results
+print(f"Calculation complete. Results saved in: {output_dir / subject_id / 'Analytical_FFT_Gradient_Maps'}")
+
+# The gradient maps on the original non-uniform points
+gradient_maps = results['gradient_map_nu']  # Shape: (n_trans, n_points)
+print(f"Gradient maps shape: {gradient_maps.shape}")
+
+# The average gradient over time (if average=True was used)
+if 'gradient_average_nu' in results:
+    avg_gradient = results['gradient_average_nu']  # Shape: (n_points,)
+    print(f"Average gradient shape: {avg_gradient.shape}")
+
+# Information about the k-space parameters used
+k_info = results['k_space_info']
+print(f"K-space extent: {k_info['max_k']:.4f}")
+print(f"K-space resolution: {k_info['k_resolution']:.4f}")
+
+# The function creates the following files:
+# - {output_dir}/{subject_id}/Analytical_FFT_Gradient_Maps/average_gradient.h5 (if average=True)
+# - {output_dir}/{subject_id}/Analytical_FFT_Gradient_Maps/AllTimePoints/all_gradients.h5
+```
+
+The standalone function provides several advantages:
+
+1. **Simplicity**: Direct computation without needing to set up the full MapBuilder pipeline.
+2. **Speed**: Much faster than the traditional gradient computation that requires interpolation.
+3. **Accuracy**: More accurate gradient calculation using the analytical formula.
+4. **Time Averaging**: Built-in support for calculating time-averaged gradients.
+5. **Automatic Optimization**: Automatically determines the optimal grid size and k-space parameters.
+
+For more details on the standalone function, its theory, and advanced usage, see the [Analytical Gradient Guide](docs/analytical_gradient_guide.md).
+
 ## Core Functionality Explained
 
 *   **Forward FFT (`compute_forward_fft`)**: Transforms your signal from the non-uniform points (`x`, `y`, `z`) where `strengths` are defined onto a regular 3D grid in k-space (frequency space). The size of this grid is estimated automatically or can be specified (`nx`, `ny`, `nz`).

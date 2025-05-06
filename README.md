@@ -110,6 +110,64 @@ enhanced_metrics = map_builder.compute_enhanced_metrics(
 
 See the [Enhanced Features Example Notebook](notebooks/Enhanced_Features_Example.ipynb) for a complete demonstration.
 
+### Using the Standalone Analytical Gradient Function
+
+For cases where you only need to compute the analytical radial gradient without using the full `MapBuilder` pipeline, you can directly use the `calculate_analytical_gradient` function:
+
+```python
+from QM_FFT_Analysis.utils import calculate_analytical_gradient
+import numpy as np
+
+# Example data
+n_points = 1000
+n_trans = 3  # Number of time points
+x = np.random.uniform(-np.pi, np.pi, n_points)
+y = np.random.uniform(-np.pi, np.pi, n_points)
+z = np.random.uniform(-np.pi, np.pi, n_points)
+strengths = np.random.randn(n_trans, n_points) + 1j * np.random.randn(n_trans, n_points)
+
+# Calculate the analytical gradient
+results = calculate_analytical_gradient(
+    x=x, y=y, z=z, strengths=strengths,
+    subject_id="subject_001",
+    output_dir="./output",
+    # Optional parameters:
+    # nx=64, ny=64, nz=64,  # Grid dimensions (estimated by default)
+    # eps=1e-6,             # FINUFFT precision
+    # export_nifti=True,    # Export results to NIfTI format
+    # affine_transform=None # Affine transformation matrix for NIfTI
+    # average=True          # Compute average across time points (default=True)
+)
+
+# Access results
+gradient_map_nu = results['gradient_map_nu']      # On original non-uniform points
+gradient_map_grid = results['gradient_map_grid']  # Interpolated to regular grid
+fft_result = results['fft_result']                # Forward FFT result
+
+# If average=True was used
+if 'gradient_average_nu' in results:
+    gradient_avg_nu = results['gradient_average_nu']    # Average gradient on points
+    gradient_avg_grid = results['gradient_average_grid'] # Average on grid
+
+# The function saves results to:
+# - output_dir/subject_id/Analytical_FFT_Gradient_Maps/average_gradient.h5 (if average=True)
+# - output_dir/subject_id/Analytical_FFT_Gradient_Maps/AllTimePoints/all_gradients.h5
+```
+
+This standalone function implements the exact analytical radial gradient as described in the paper "Multiscale k-Space Gradient Mapping in fMRI: Theory, Shell Selection, and Excitability Proxy", using the mathematical formula:
+
+$$\frac{\partial f}{\partial r}(\mathbf{x}) = \mathcal{F}^{-1}\bigl\{\,i2\pi\,\|\mathbf{k}\|\,F(\mathbf{k})\bigr\}$$
+
+#### Key Features of the Standalone Function:
+
+- **Automatic K-Space Optimization**: Automatically calculates optimal grid size and k-space extent based on input data distribution.
+- **Time Averaging**: Can compute and save the average gradient over multiple time points.
+- **NIfTI Export**: Optional export to NIfTI format for neuroimaging applications.
+- **Comprehensive Outputs**: Returns both non-uniform and gridded gradient maps, along with k-space information.
+- **Organized Results**: Saves results in a structured directory hierarchy with HDF5 files.
+
+For a comprehensive explanation of the function, including theory, parameters, examples, and troubleshooting, see the [Analytical Gradient Guide](docs/analytical_gradient_guide.md).
+
 ## Output Structure
 
 The package generates three HDF5 files for each subject:
@@ -155,6 +213,7 @@ The package includes comprehensive documentation for users and developers:
 * [Comprehensive Guide](docs/comprehensive_guide.myst.md): Detailed overview of the package's functionality and applications
 * [Map Builder Guide](docs/map_builder_guide.md): Focused explanation of the `MapBuilder` class and its methods
 * [Enhanced Features Guide](docs/enhanced_features_guide.md): Details on optional advanced features and spectral metrics
+* [Analytical Gradient Guide](docs/analytical_gradient_guide.md): Detailed guide to the standalone analytical gradient function
 
 ### Additional Resources
 * [Analysis Module Guide](docs/analysis_module_guide.md): Details on analytical functions for non-uniform inverse maps

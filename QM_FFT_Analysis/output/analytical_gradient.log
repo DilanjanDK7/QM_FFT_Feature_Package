@@ -1,0 +1,24 @@
+2025-05-06 18:48:09,791 - AnalyticalGradient_example_with_avg - INFO - Starting analytical gradient calculation
+2025-05-06 18:48:09,791 - AnalyticalGradient_example_with_avg - INFO - Processing data with n_trans=5, n_points=1000
+2025-05-06 18:48:09,791 - AnalyticalGradient_example_with_avg - INFO - Estimated grid dimensions (nx, ny, nz): (20, 20, 20)
+2025-05-06 18:48:09,791 - AnalyticalGradient_example_with_avg - INFO - Initializing FINUFFT plans
+2025-05-06 18:48:09,795 - AnalyticalGradient_example_with_avg - INFO - Computing forward FFT
+2025-05-06 18:48:09,801 - AnalyticalGradient_example_with_avg - INFO - Computing analytical radial gradient in k-space
+2025-05-06 18:48:09,801 - AnalyticalGradient_example_with_avg - INFO - Computing inverse FFT for gradient map
+2025-05-06 18:48:09,803 - AnalyticalGradient_example_with_avg - INFO - Computing average gradient magnitude across time points
+2025-05-06 18:48:09,803 - AnalyticalGradient_example_with_avg - INFO - Interpolating gradient map onto regular grid
+2025-05-06 18:48:09,915 - AnalyticalGradient_example_with_avg - INFO - Saving results to output/example_with_avg/Analytical_FFT_Gradient_Maps
+2025-05-06 18:48:09,917 - AnalyticalGradient_example_with_avg - INFO - Saved average gradient map
+2025-05-06 18:48:09,927 - AnalyticalGradient_example_with_avg - INFO - Saved gradient maps for all time points
+2025-05-06 18:48:09,927 - AnalyticalGradient_example_with_avg - INFO - Analytical gradient calculation complete
+2025-05-06 18:48:09,928 - AnalyticalGradient_example_no_avg - INFO - Starting analytical gradient calculation
+2025-05-06 18:48:09,928 - AnalyticalGradient_example_no_avg - INFO - Processing data with n_trans=5, n_points=1000
+2025-05-06 18:48:09,928 - AnalyticalGradient_example_no_avg - INFO - Estimated grid dimensions (nx, ny, nz): (20, 20, 20)
+2025-05-06 18:48:09,928 - AnalyticalGradient_example_no_avg - INFO - Initializing FINUFFT plans
+2025-05-06 18:48:09,931 - AnalyticalGradient_example_no_avg - INFO - Computing forward FFT
+2025-05-06 18:48:09,945 - AnalyticalGradient_example_no_avg - INFO - Computing analytical radial gradient in k-space
+2025-05-06 18:48:09,946 - AnalyticalGradient_example_no_avg - INFO - Computing inverse FFT for gradient map
+2025-05-06 18:48:09,957 - AnalyticalGradient_example_no_avg - INFO - Interpolating gradient map onto regular grid
+2025-05-06 18:48:10,051 - AnalyticalGradient_example_no_avg - INFO - Saving results to output/example_no_avg/Analytical_FFT_Gradient_Maps
+2025-05-06 18:48:10,062 - AnalyticalGradient_example_no_avg - INFO - Saved gradient maps for all time points
+2025-05-06 18:48:10,062 - AnalyticalGradient_example_no_avg - INFO - Analytical gradient calculation complete
