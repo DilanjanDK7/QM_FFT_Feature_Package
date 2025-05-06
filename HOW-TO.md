@@ -88,6 +88,244 @@ map_builder.process_map(
 
 print(f"Processing complete. Results saved in: {map_builder.output_dir / subject_id}")
 
+# 4. Access Results (Optional)
+# Results are stored in attributes and saved to files
+# print("FFT Result shape:", map_builder.fft_result.shape)
+# print("Number of inverse maps:", len(map_builder.inverse_maps))
+# print("Shape of first inverse map:", map_builder.inverse_maps[0].shape)
+# print("Number of gradient maps:", len(map_builder.gradient_maps))
+# print("Shape of first gradient map:", map_builder.gradient_maps[0].shape)
+# print("Analysis results for map 0:", map_builder.analysis_results.get('map_0', {}).keys())
+
+## Using the Standalone Analytical Gradient Function
+
+If you only need to compute the analytical radial gradient directly, without using the full MapBuilder pipeline, you can use the standalone function:
+
+```python
+import numpy as np
+from pathlib import Path
+from QM_FFT_Analysis.utils import calculate_analytical_gradient
+
+# 1. Define Inputs
+subject_id = "gradient_example_01"
+output_dir = Path("./gradient_output") 
+
+# --- Generate sample data ---
+n_points = 1000  # Number of non-uniform points
+n_trans = 5      # Number of time points or transforms
+
+# Non-uniform coordinates
+x = np.random.uniform(-np.pi, np.pi, n_points)
+y = np.random.uniform(-np.pi, np.pi, n_points)
+z = np.random.uniform(-np.pi, np.pi, n_points)
+
+# Complex strengths (for example, a simple Gaussian function)
+r = np.sqrt(x**2 + y**2 + z**2)
+strengths_base = np.exp(-r**2)  # Base pattern
+
+# Create multiple time points with variations
+strengths = np.zeros((n_trans, n_points), dtype=np.complex128)
+for t in range(n_trans):
+    # Add time-dependent variations
+    phase_shift = np.exp(1j * t * r / 2)
+    strengths[t] = strengths_base * phase_shift
+
+# 2. Calculate the analytical gradient
+print(f"Calculating analytical gradient for {subject_id}...")
+results = calculate_analytical_gradient(
+    x=x, y=y, z=z, 
+    strengths=strengths,
+    subject_id=subject_id,
+    output_dir=output_dir,
+    # Optional parameters with their defaults:
+    # estimate_grid=True,       # Auto-estimate grid size
+    # upsampling_factor=2.0,    # For grid estimation
+    # average=True,             # Calculate time average
+    # export_nifti=False,       # Export to NIfTI format
+)
+
+# 3. Access Results
+print(f"Calculation complete. Results saved in: {output_dir / subject_id / 'Analytical_FFT_Gradient_Maps'}")
+
+# The gradient maps on the original non-uniform points
+gradient_maps = results['gradient_map_nu']  # Shape: (n_trans, n_points)
+print(f"Gradient maps shape: {gradient_maps.shape}")
+
+# The average gradient over time (if average=True was used)
+if 'gradient_average_nu' in results:
+    avg_gradient = results['gradient_average_nu']  # Shape: (n_points,)
+    print(f"Average gradient shape: {avg_gradient.shape}")
+
+# Information about the k-space parameters used
+k_info = results['k_space_info']
+print(f"K-space extent: {k_info['max_k']:.4f}")
+print(f"K-space resolution: {k_info['k_resolution']:.4f}")
+
+# The function creates the following files:
+# - {output_dir}/{subject_id}/Analytical_FFT_Gradient_Maps/average_gradient.h5 (if average=True)
+# - {output_dir}/{subject_id}/Analytical_FFT_Gradient_Maps/AllTimePoints/all_gradients.h5
+```
+
+The standalone function provides several advantages:
+
+1. **Simplicity**: Direct computation without needing to set up the full MapBuilder pipeline.
+2. **Speed**: Much faster than the traditional gradient computation that requires interpolation.
+3. **Accuracy**: More accurate gradient calculation using the analytical formula.
+4. **Time Averaging**: Built-in support for calculating time-averaged gradients.
+5. **Automatic Optimization**: Automatically determines the optimal grid size and k-space parameters.
+
+For more details on the standalone function, its theory, and advanced usage, see the [Analytical Gradient Guide](docs/analytical_gradient_guide.md).
+
+## Core Functionality Explained
+
+*   **Forward FFT (`compute_forward_fft`)**: Transforms your signal from the non-uniform points (`x`, `y`, `z`) where `strengths` are defined onto a regular 3D grid in k-space (frequency space). The size of this grid is estimated automatically or can be specified (`nx`, `ny`, `nz`).
+*   **K-Space Masking (`generate_kspace_masks`)**: Creates spherical masks centered at random locations in k-space. This allows you to select specific frequency components from the forward FFT result.
+*   **Inverse Map (`compute_inverse_maps`)**: Takes the masked k-space data and transforms it *back* to the original non-uniform point locations. This shows the spatial representation of the selected frequency components.
+*   **Gradient Map (`compute_gradient_maps`)**: Calculates the spatial rate of change (gradient magnitude) of the signal. Since the inverse map is on non-uniform points, the signal is first interpolated onto the regular grid before the gradient is calculated using standard numerical methods.
+*   **Analysis (`analyze_inverse_maps`)**: Computes various metrics directly on the non-uniform inverse maps:
+    *   `magnitude`/`phase`: Basic properties of the complex signal at each point.
+    *   `local_variance`: Measures spatial heterogeneity of the magnitude signal.
+    *   `temporal_difference`: Measures how magnitude/phase change between consecutive transforms (if `n_trans > 1`).
+
+## Output Files
+
+When running the package, three HDF5 files are created for each subject in the output directory:
+
+### 1. `data.h5`: Raw computational results
+   * `/forward_fft`: Complex FFT result on regular grid
+   * `/kspace_masks/{mask_id}`: Binary masks in k-space
+   * `/inverse_maps/{mask_id}`: Complex inverse maps for each mask
+   * `/gradient_maps/{mask_id}`: Gradient magnitude maps
+   * `/params`: Processing parameters and metadata
+
+### 2. `analysis.h5`: Analysis results
+   * `/magnitude/{mask_id}`: Magnitude values
+   * `/phase/{mask_id}`: Phase angle values
+   * `/local_variance/{mask_id}`: Local variance metrics
+   * `/temporal_diff_magnitude/{mask_id}`: Temporal derivatives
+   * `/temporal_diff_phase/{mask_id}`: Phase changes over time
+   * `/summary`: Summary statistics for each metric
+
+### 3. `enhanced.h5`: Enhanced feature results
+   * `/spectral_slope`: Power law exponents
+   * `/spectral_entropy`: Entropy of k-space distribution
+   * `/anisotropy`: Directional preference metrics
+   * `/higher_moments`: Skewness and kurtosis values
+   * `/excitation`: Neural activity estimates
+   * `/analytical_gradients/{mask_id}`: Analytically computed gradients
+   * `/params`: Configuration parameters for enhanced features
+
+## Performance Considerations
+
+When working with large datasets, consider the following:
+
+1. **Memory Requirements**
+   - Small scale (1K points, 5 times): ~100MB RAM
+   - Medium scale (5K points, 10 times): ~500MB RAM
+   - Large scale (50K points, 100 times): ~4GB RAM
+
+2. **Storage Requirements**
+   - Small scale: ~2MB total
+   - Medium scale: ~18MB total
+   - Large scale: ~1.7GB total
+
+3. **Processing Time**
+   - Small scale: ~1-2 seconds
+   - Medium scale: ~5-10 seconds
+   - Large scale: ~88 seconds
+
+4. **Optimization Tips**
+   - Use analytical gradient method for faster processing
+   - Enable HDF5 compression for efficient storage
+   - Consider batch processing for very large datasets 
+   # How to Install and Use QM_FFT_Analysis
+
+This guide provides practical steps for installing and using the `QM_FFT_Analysis` package.
+
+## Installation
+
+We recommend using a virtual environment to manage dependencies.
+
+1. **Clone the Repository:**
+    ```bash
+    # git clone <repository_url> # Replace with the actual URL
+    # cd QM_FFT_Feature_Package
+    ```
+
+2. **Create and Activate Virtual Environment:**
+    ```bash
+    # Using venv (Python 3 standard library)
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    
+    # Or using Conda
+    # conda create -n qmfft_env python=3.8 # Or your preferred Python version
+    # conda activate qmfft_env
+    ```
+
+3. **Install the Package and Dependencies:**
+    Navigate to the root directory of the project (where `pyproject.toml` is located) and run:
+    
+   * **Standard installation:**
+        ```bash
+        pip install .
+        ```
+
+   * **Development (editable) installation:**
+        ```bash
+        pip install -e .
+        ```
+
+## Basic Usage Example
+
+Here's how to run the main processing pipeline with the `MapBuilder` class:
+
+```python
+import numpy as np
+from pathlib import Path
+from QM_FFT_Analysis.utils import MapBuilder
+
+# 1. Define inputs and prepare data
+subject_id = "example_subject_01"
+output_dir = Path("./output") 
+
+# Generate example data (replace with your actual data)
+n_points = 500  # Number of non-uniform points
+n_trans = 3     # Number of time points
+x = np.random.uniform(-np.pi, np.pi, n_points)
+y = np.random.uniform(-np.pi, np.pi, n_points)
+z = np.random.uniform(-np.pi, np.pi, n_points)
+strengths = np.random.randn(n_trans, n_points) + 1j * np.random.randn(n_trans, n_points)
+
+# 2. Initialize MapBuilder
+map_builder = MapBuilder(
+    subject_id=subject_id,
+    output_dir=output_dir,
+    x=x, y=y, z=z,
+    strengths=strengths,
+    eps=1e-6,               # FINUFFT precision
+    dtype='complex128',     # Data type for calculations
+    enable_enhanced_features=True  # Enable enhanced features
+)
+
+# 3. Run the full processing pipeline
+analyses_to_run = [
+    'magnitude', 'phase',   # Basic analyses
+    'local_variance',       # Spatial heterogeneity
+    'temporal_diff_magnitude', 'temporal_diff_phase',  # Temporal changes
+    'spectral_slope', 'spectral_entropy', 'anisotropy'  # Enhanced metrics
+]
+
+map_builder.process_map(
+    n_centers=3,              # Number of k-space masks
+    radius=0.6,               # Radius of k-space masks
+    analyses_to_run=analyses_to_run,
+    k_neighbors_local_var=5,  # For local variance calculation
+    use_analytical_gradient=True  # Faster gradient method
+)
+
+print(f"Processing complete. Results saved in: {map_builder.output_dir / subject_id}")
+
 # 4. Alternative: Compute only enhanced metrics (much faster)
 enhanced_metrics = map_builder.compute_enhanced_metrics(
     metrics_to_run=['spectral_slope', 'spectral_entropy', 'anisotropy']
