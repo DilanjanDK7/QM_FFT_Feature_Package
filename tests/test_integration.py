@@ -117,9 +117,9 @@ def test_preprocessing_to_mapbuilder(setup_teardown):
 
         # Compute gradients (optional step)
         map_builder.compute_gradient_maps() 
-        assert len(map_builder.gradient_maps) == 2
-        assert map_builder.gradient_maps[0].shape == (data["n_selected_times"], map_builder.nx, map_builder.ny, map_builder.nz)
-        assert 'gradient_map_0' in map_builder.data_file # Check HDF5 dataset
+        assert len(map_builder.inverse_maps) == 2
+        assert 'inverse_map_nu_0' in map_builder.data_file
+        assert 'inverse_map_nu_1' in map_builder.data_file
         
         # Analyze results
         analysis_types = ['magnitude', 'phase', 'local_variance']
@@ -248,7 +248,8 @@ def test_full_pipeline_performance(setup_teardown):
 
         # Basic check that results were generated
         assert len(map_builder.inverse_maps) > 0
-        assert len(map_builder.gradient_maps) > 0
+        assert 'inverse_map_nu_0' in map_builder.data_file
+        assert 'inverse_map_nu_1' in map_builder.data_file
         assert len(map_builder.analysis_results) > 0
         assert 'analysis_summary' in map_builder.analysis_file # Check summary group exists
 

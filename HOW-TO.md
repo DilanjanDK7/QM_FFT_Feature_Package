@@ -105,6 +105,7 @@ analyses_to_run = [
     'temporal_diff_magnitude', # Only computes if n_trans >= 2
     'temporal_diff_phase'      # Only computes if n_trans >= 2
 ]
+
 map_builder.process_map(
     n_centers=3,        # Number of *spherical* k-space masks to generate by default
     radius=0.6,         # Radius of spherical k-space masks
@@ -265,10 +266,21 @@ When working with large datasets, consider the following:
    - Large scale: ~1.7GB total
    - Using skip_interpolation=True reduces storage requirements
 
-3. **Performance Tips**
-   - Always use skip_interpolation=True when you don't specifically need grid-interpolated data
-   - This provides up to 245x speedup for gradient calculations
-   - Only use skip_interpolation=False when you need to:
-     - Visualize data on a regular grid
-     - Export to NIfTI format (which requires regular grid data)
-     - Use tools that specifically require data on a regular grid 
+
+3. **Processing Time**
+   - Small scale: ~1-2 seconds
+   - Medium scale: ~5-10 seconds
+   - Large scale: ~88 seconds
+
+4. **Optimization Tips**
+   - Use analytical gradient method for faster processing
+   - Enable HDF5 compression for efficient storage
+   - Consider batch processing for very large datasets 
+
+5. **Performance Tips**
+- Always use skip_interpolation=True when you don't specifically need grid-interpolated data
+- This provides up to 245x speedup for gradient calculations
+- Only use skip_interpolation=False when you need to:
+    - Visualize data on a regular grid
+    - Export to NIfTI format (which requires regular grid data)
+    - Use tools that specifically require data on a regular grid 
