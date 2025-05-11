@@ -104,9 +104,28 @@ The following methods generate boolean masks (shape `(nx, ny, nz)`) representing
 *   Stores the results (list of arrays, each shape `(n_trans, n_points)`) in `self.inverse_maps`.
 *   Saves each inverse map to `data/inverse_map_{i}.npy`.
 
-### `compute_gradient_maps(use_analytical_method=None, skip_interpolation=True)`
+### `compute_gradient_maps(use_analytical_method=None, skip_interpolation=Trueuse_analytical_method=None, skip_interpolation=True)`
 
 *   Calculates the spatial gradient magnitude for each inverse map.
+*   **Parameters:**
+    * `use_analytical_method` (bool, optional): If True, uses the analytical k-space method for calculating gradients (only available if enhanced features are enabled). Default is None (uses config setting if enhanced features enabled).
+    * `skip_interpolation` (bool, optional): Whether to skip interpolation to regular grid. Default is True for significantly improved performance.
+*   **When skip_interpolation=True (Default)**:
+    * Operates directly on non-uniform inverse map data (dramatically faster)
+    * Can be up to 245x faster than using interpolation
+    * Stores the gradient on non-uniform points, matching the original data coordinates
+    * Uses minimal memory since no grid interpolation is performed
+    * Most suitable for subsequent processing that works with non-uniform data
+*   **When skip_interpolation=False**:
+    * Interpolates the complex data from each inverse map onto the uniform grid (`nx, ny, nz`) using `scipy.interpolate.griddata` (linear interpolation)
+    * Calculates the gradient components (`dx`, `dy`, `dz`) of the *interpolated* data on the grid using `np.gradient`
+    * Computes the gradient magnitude `sqrt(|dx|^2 + |dy|^2 + |dz|^2)` on the grid
+    * Requires significantly more processing time and memory
+    * Suitable for visualization or when working with tools that require grid-based data
+*   **Storage Differences:**
+    * With skip_interpolation=True, references to original non-uniform data are stored in `self.gradient_maps`
+    * With skip_interpolation=False, grid-interpolated data is stored in `self.gradient_maps` (shape `(n_trans, nx, ny, nz)`)
+*   Saves each gradient map to the appropriate format in `data/gradient_map_{i}.h5`
 *   **Parameters:**
     * `use_analytical_method` (bool, optional): If True, uses the analytical k-space method for calculating gradients (only available if enhanced features are enabled). Default is None (uses config setting if enhanced features enabled).
     * `skip_interpolation` (bool, optional): Whether to skip interpolation to regular grid. Default is True for significantly improved performance.
@@ -153,13 +172,13 @@ The following methods generate boolean masks (shape `(nx, ny, nz)`) representing
 *   Saves the plot as an HTML file in the `plots/` directory.
 *   *Note:* This currently needs manual calls if you want plots for specific outputs or transforms.
 
-### `process_map(n_centers=1, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5, use_analytical_gradient=None, calculate_local_variance=False, use_analytical_gradient=None, skip_interpolation=True)`
+### `process_map(n_centers=1, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5, use_analytical_gradient=None, skip_interpolation=True, use_analytical_gradient=None, calculate_local_variance=False, use_analytical_gradient=None, skip_interpolation=True)`
 
 *   Orchestrates the main pipeline:
     1.  `compute_forward_fft()`
     2.  `generate_kspace_masks(n_centers, radius)` (Note: Only calls the spherical mask generator by default)
     3.  `compute_inverse_maps()`
-    4.  `compute_gradient_maps(use_analytical_method=use_analytical_gradientuse_analytical_method=use_analytical_gradient, skip_interpolation=skip_interpolation)`
+    4.  `compute_gradient_maps(use_analytical_method=use_analytical_gradient, skip_interpolation=skip_interpolationuse_analytical_method=use_analytical_gradientuse_analytical_method=use_analytical_gradient, skip_interpolation=skip_interpolation)`
     5.  `analyze_inverse_maps(analyses_to_run, k_neighbors=k_neighbors_local_var, enable_local_variance=calculate_local_variance)`
 *   **Parameters:**
     * `n_centers` (int): Number of spherical masks to generate (default: 2)

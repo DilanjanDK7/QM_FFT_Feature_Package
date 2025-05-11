@@ -42,7 +42,8 @@ calculate_analytical_gradient(
     upsampling_factor=2,
     export_nifti=False,
     affine_transform=None,
-    average=True
+    average=True,
+    skip_interpolation=True
 )
 ```
 
@@ -62,6 +63,7 @@ calculate_analytical_gradient(
 | `export_nifti` | bool | Whether to export results as NIfTI files |
 | `affine_transform` | ndarray | 4x4 affine transformation matrix for NIfTI export |
 | `average` | bool | Whether to compute and save the average gradient over time points |
+| `skip_interpolation` | bool | Whether to skip interpolation to regular grid. Default is True for significantly improved performance. |
 
 ## Return Value
 
@@ -70,9 +72,9 @@ The function returns a dictionary containing:
 | Key | Description |
 |-----|-------------|
 | `gradient_map_nu` | Gradient map on non-uniform points (n_trans, n_points) |
-| `gradient_map_grid` | Gradient map on regular grid (n_trans, nx, ny, nz) if interpolated |
+| `gradient_map_grid` | Gradient map on regular grid (n_trans, nx, ny, nz) if interpolated (only if skip_interpolation=False) |
 | `gradient_average_nu` | Average gradient map on non-uniform points (n_points) if average=True |
-| `gradient_average_grid` | Average gradient map on regular grid (nx, ny, nz) if average=True |
+| `gradient_average_grid` | Average gradient map on regular grid (nx, ny, nz) if average=True and skip_interpolation=False |
 | `fft_result` | Forward FFT result |
 | `coordinates` | Dictionary with coordinates and grid information |
 | `k_space_info` | Information about the k-space grid (max_k, k_resolution, etc.) |
@@ -105,22 +107,23 @@ output_dir/
 
 ### File Contents
 
-1. **average_gradient.h5**:
-   - `gradient_average_nu`: Average gradient on non-uniform points
-   - `gradient_average_grid`: Average gradient interpolated to regular grid
-   - `coordinates`: Coordinate information
-   - `k_space_info`: K-space parameters and quality metrics
+The contents of the output files will depend on the `skip_interpolation` parameter:
 
-2. **all_gradients.h5**:
-   - `gradient_map_nu`: Gradient maps for all time points on non-uniform points
-   - `gradient_map_grid`: Gradient maps interpolated to regular grid
-   - `fft_result`: Forward FFT result
+1. **With skip_interpolation=True (Default):**
+   - `gradient_map_nu`: Gradient maps on non-uniform points
+   - `gradient_average_nu`: Average gradient on non-uniform points (if average=True)
    - `coordinates`: Coordinate information
    - `k_space_info`: K-space parameters and quality metrics
+   - `fft_result`: Forward FFT result
+
+2. **With skip_interpolation=False:**
+   - All of the above, plus:
+   - `gradient_map_grid`: Gradient maps interpolated to regular grid
+   - `gradient_average_grid`: Average gradient interpolated to regular grid (if average=True)
 
 ## Examples
 
-### Basic Usage
+### Basic Usage (With Skip Interpolation)
 
 ```python
 import numpy as np
@@ -138,16 +141,33 @@ z = np.random.uniform(-np.pi, np.pi, n_points)
 # Create complex strengths with 5 time points
 strengths = np.random.randn(n_trans, n_points) + 1j * np.random.randn(n_trans, n_points)
 
-# Calculate the analytical gradient
+# Calculate the analytical gradient (skip_interpolation=True by default)
 results = calculate_analytical_gradient(
     x=x, y=y, z=z, strengths=strengths,
     subject_id="example",
     output_dir="./output"
 )
 
-# Access the gradient map
+# Access the gradient map (non-uniform points)
 gradient_map = results['gradient_map_nu']
 print(f"Gradient map shape: {gradient_map.shape}")
+```
+
+### With Interpolation
+
+```python
+# Calculate with interpolation to regular grid
+results_with_interp = calculate_analytical_gradient(
+    x=x, y=y, z=z, strengths=strengths,
+    subject_id="example_with_interp",
+    output_dir="./output",
+    skip_interpolation=False  # Enable interpolation to regular grid
+)
+
+# Access both non-uniform and grid data
+gradient_map_nu = results_with_interp['gradient_map_nu']
+gradient_map_grid = results_with_interp['gradient_map_grid']
+print(f"Grid gradient map shape: {gradient_map_grid.shape}")
 ```
 
 ### Custom Grid Size

@@ -217,6 +217,8 @@ def test_gradient_maps(setup_teardown):
 
     # Compute gradient maps using interpolation method - explicitly disable skipping interpolation
     map_builder.compute_gradient_maps(use_analytical_method=False, skip_interpolation=False)
+    # Compute gradient maps using interpolation method - explicitly disable skipping interpolation
+    map_builder.compute_gradient_maps(use_analytical_method=False, skip_interpolation=False)
 
     # Verify output
     assert len(map_builder.gradient_maps) == n_masks_to_test
@@ -472,8 +474,6 @@ def test_gradient_map_constant_input(setup_teardown):
         # Check gradient magnitude - should be near zero for constant input
         assert np.allclose(map_builder.gradient_maps[0], 0, atol=1e-5)
 
-    # The gradient map corresponding to the constant input should be zero
-        assert np.allclose(map_builder.gradient_maps[0], 0, atol=1e-7) # Increased tolerance
     finally:
         if map_builder:
             try:

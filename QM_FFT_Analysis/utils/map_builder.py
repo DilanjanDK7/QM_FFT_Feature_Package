@@ -530,7 +530,7 @@ class MapBuilder:
         
         return interpolated.reshape(nx, ny, nz)
 
-    def compute_gradient_maps(self, use_analytical_method=None, skip_interpolation=True):
+    def compute_gradient_maps(self, use_analytical_method=None, skip_interpolation=True, skip_interpolation=True):
         """
         Compute gradient maps by interpolating inverse maps onto a grid.
         
@@ -1078,7 +1078,7 @@ class MapBuilder:
         return enhanced_results
 
     def process_map(self, n_centers=1, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5,
-                  use_analytical_gradient=None, calculate_local_variance=False, skip_interpolation=True):
+                  use_analytical_gradient=None, skip_interpolation=True, calculate_local_variance=False, skip_interpolation=True):
         """Run the main processing steps: FFT, masks, inverse, gradients, and analysis.
         
         Args:
@@ -1088,6 +1088,9 @@ class MapBuilder:
             k_neighbors_local_var (int, optional): k for local variance. Defaults to 5.
             use_analytical_gradient (bool, optional): Whether to use analytical gradient.
                 If None, uses the value from config if enhanced features enabled.
+            skip_interpolation (bool, optional): Whether to skip interpolation to regular grid.
+                When True, only non-uniform data is stored, which significantly improves performance.
+                Default is True.
             calculate_local_variance (bool, optional): Whether to calculate local variance.
                 Defaults to False as it is computationally expensive.
                 This parameter is passed as enable_local_variance to analyze_inverse_maps.
