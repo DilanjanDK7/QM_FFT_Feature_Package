@@ -94,7 +94,8 @@ def calculate_analytical_gradient(
     upsampling_factor=2,
     export_nifti=False,
     affine_transform=None,
-    average=True
+    average=True,
+    skip_interpolation=True
 ):
     """
     Calculate analytical radial gradient directly from non-uniform points.
@@ -123,6 +124,9 @@ def calculate_analytical_gradient(
         export_nifti (bool): Whether to export results as NIfTI files.
         affine_transform (ndarray, optional): 4x4 affine transformation matrix for NIfTI output.
         average (bool): Whether to compute and save the average gradient over time points.
+                        Default is True.
+        skip_interpolation (bool): Whether to skip interpolation to regular grid.
+                        When True, only non-uniform data is returned, which significantly improves performance.
                         Default is True.
     
     Returns:
@@ -156,7 +160,11 @@ def calculate_analytical_gradient(
         all_timepoints_dir = None
     
     logger = setup_logging(f"AnalyticalGradient_{subject_id}", output_dir)
-    logger.info("Starting analytical gradient calculation")
+    
+    if skip_interpolation:
+        logger.info("Starting analytical gradient calculation (without interpolation)")
+    else:
+        logger.info("Starting analytical gradient calculation")
     
     # Input validation and preparation
     # Convert coordinates to expected format
@@ -305,55 +313,59 @@ def calculate_analytical_gradient(
         gradient_average_nu = np.mean(gradient_magnitude_nu, axis=0)
         results['gradient_average_nu'] = gradient_average_nu
     
-    # Optionally, interpolate onto a regular grid for visualization/compatibility
-    logger.info("Interpolating gradient map onto regular grid")
-    points_nu = np.stack((x_coords, y_coords, z_coords), axis=-1)
-    
-    # Define the regular grid for interpolation
-    grid_x = np.linspace(x_coords.min(), x_coords.max(), nx)
-    grid_y = np.linspace(y_coords.min(), y_coords.max(), ny)
-    grid_z = np.linspace(z_coords.min(), z_coords.max(), nz)
-    
-    X, Y, Z = np.meshgrid(grid_x, grid_y, grid_z, indexing='ij')
-    points_u = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-    
-    # Interpolate gradient magnitude onto regular grid
-    gradient_magnitude_grid = np.zeros((n_trans, nx, ny, nz), dtype=np.float32)
-    
-    for t in range(n_trans):
-        # Determine fill value (mean is typically a reasonable choice)
-        fill_val = np.mean(gradient_magnitude_nu[t])
+    # Skip interpolation if requested
+    if not skip_interpolation:
+        # Optionally, interpolate onto a regular grid for visualization/compatibility
+        logger.info("Interpolating gradient map onto regular grid")
+        points_nu = np.stack((x_coords, y_coords, z_coords), axis=-1)
         
-        # Interpolate using scipy's griddata
-        interpolated_data_flat = griddata(
-            points_nu, 
-            gradient_magnitude_nu[t],
-            points_u, 
-            method='linear',
-            fill_value=fill_val
-        )
+        # Define the regular grid for interpolation
+        grid_x = np.linspace(x_coords.min(), x_coords.max(), nx)
+        grid_y = np.linspace(y_coords.min(), y_coords.max(), ny)
+        grid_z = np.linspace(z_coords.min(), z_coords.max(), nz)
         
-        gradient_magnitude_grid[t] = interpolated_data_flat.reshape(nx, ny, nz)
-    
-    # Add gridded result to return dictionary
-    results['gradient_map_grid'] = gradient_magnitude_grid
-    
-    # Interpolate average gradient if it exists
-    if average and n_trans > 1:
-        # Determine fill value for average
-        fill_val_avg = np.mean(gradient_average_nu)
+        X, Y, Z = np.meshgrid(grid_x, grid_y, grid_z, indexing='ij')
+        points_u = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
         
-        # Interpolate average gradient
-        interpolated_avg_flat = griddata(
-            points_nu,
-            gradient_average_nu,
-            points_u,
-            method='linear',
-            fill_value=fill_val_avg
-        )
+        # Interpolate gradient magnitude onto regular grid
+        gradient_magnitude_grid = np.zeros((n_trans, nx, ny, nz), dtype=np.float32)
         
-        gradient_average_grid = interpolated_avg_flat.reshape(nx, ny, nz)
-        results['gradient_average_grid'] = gradient_average_grid
+        for t in range(n_trans):
+            # Determine fill value (mean is typically a reasonable choice)
+            fill_val = np.mean(gradient_magnitude_nu[t])
+            
+            # Interpolate using scipy's griddata
+            interpolated_data_flat = griddata(
+                points_nu, 
+                gradient_magnitude_nu[t],
+                points_u, 
+                method='linear',
+                fill_value=fill_val
+            )
+            
+            gradient_magnitude_grid[t] = interpolated_data_flat.reshape(nx, ny, nz)
+        
+        # Add gridded result to return dictionary
+        results['gradient_map_grid'] = gradient_magnitude_grid
+        
+        # Interpolate average gradient if it exists
+        if average and n_trans > 1:
+            # Determine fill value for average
+            fill_val_avg = np.mean(gradient_average_nu)
+            
+            # Interpolate average gradient
+            interpolated_avg_flat = griddata(
+                points_nu,
+                gradient_average_nu,
+                points_u,
+                method='linear',
+                fill_value=fill_val_avg
+            )
+            
+            gradient_average_grid = interpolated_avg_flat.reshape(nx, ny, nz)
+            results['gradient_average_grid'] = gradient_average_grid
+    else:
+        logger.info("Skipping interpolation to regular grid as requested")
     
     # Save outputs if output_dir is provided
     if output_dir:
@@ -366,9 +378,10 @@ def calculate_analytical_gradient(
                 f.create_dataset('gradient_average_nu', data=gradient_average_nu, 
                                 compression="gzip", compression_opts=9)
                 
-                # Save average interpolated grid map
-                f.create_dataset('gradient_average_grid', data=gradient_average_grid,
-                                compression="gzip", compression_opts=9)
+                # Save average interpolated grid map if it exists
+                if not skip_interpolation and 'gradient_average_grid' in results:
+                    f.create_dataset('gradient_average_grid', data=results['gradient_average_grid'],
+                                    compression="gzip", compression_opts=9)
                 
                 # Save coordinates and grid information
                 coords_group = f.create_group('coordinates')
@@ -392,7 +405,7 @@ def calculate_analytical_gradient(
                 logger.info("Saved average gradient map")
             
             # Export average gradient to NIfTI if requested
-            if export_nifti:
+            if export_nifti and not skip_interpolation:
                 try:
                     import nibabel as nib
                     
@@ -401,7 +414,7 @@ def calculate_analytical_gradient(
                         affine_transform = np.eye(4)
                     
                     # Create NIfTI image from the average gradient map
-                    nifti_img = nib.Nifti1Image(gradient_average_grid, affine_transform)
+                    nifti_img = nib.Nifti1Image(results['gradient_average_grid'], affine_transform)
                     
                     # Save the image
                     output_file = gradient_dir / "average_gradient.nii.gz"
@@ -410,6 +423,8 @@ def calculate_analytical_gradient(
                     
                 except ImportError:
                     logger.warning("nibabel package not found. NIfTI export skipped.")
+            elif export_nifti and skip_interpolation:
+                logger.warning("NIfTI export requires interpolation. Set skip_interpolation=False to enable NIfTI export.")
         
         # Save all time points to the AllTimePoints subdirectory
         with h5py.File(all_timepoints_dir / 'all_gradients.h5', 'w') as f:
@@ -417,9 +432,10 @@ def calculate_analytical_gradient(
             f.create_dataset('gradient_map_nu', data=gradient_magnitude_nu, 
                             compression="gzip", compression_opts=9)
             
-            # Save interpolated grid maps
-            f.create_dataset('gradient_map_grid', data=gradient_magnitude_grid,
-                            compression="gzip", compression_opts=9)
+            # Save interpolated grid maps if they exist
+            if not skip_interpolation and 'gradient_map_grid' in results:
+                f.create_dataset('gradient_map_grid', data=results['gradient_map_grid'],
+                                compression="gzip", compression_opts=9)
             
             # Save k-space data
             f.create_dataset('fft_result', data=fft_result,
@@ -448,7 +464,7 @@ def calculate_analytical_gradient(
             logger.info("Saved gradient maps for all time points")
         
         # Export each time point to NIfTI if requested
-        if export_nifti:
+        if export_nifti and not skip_interpolation:
             try:
                 import nibabel as nib
                 
@@ -459,7 +475,7 @@ def calculate_analytical_gradient(
                 # Export each time point as a separate NIfTI file
                 for t in range(n_trans):
                     # Create NIfTI image from the gradient map
-                    nifti_img = nib.Nifti1Image(gradient_magnitude_grid[t], affine_transform)
+                    nifti_img = nib.Nifti1Image(results['gradient_map_grid'][t], affine_transform)
                     
                     # Save the image
                     output_file = all_timepoints_dir / f"gradient_map_t{t}.nii.gz"

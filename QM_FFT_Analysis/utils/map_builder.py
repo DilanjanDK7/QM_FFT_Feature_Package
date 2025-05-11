@@ -522,7 +522,7 @@ class MapBuilder:
         
         return interpolated.reshape(nx, ny, nz)
 
-    def compute_gradient_maps(self, use_analytical_method=None):
+    def compute_gradient_maps(self, use_analytical_method=None, skip_interpolation=True):
         """
         Compute gradient maps by interpolating inverse maps onto a grid.
         
@@ -532,6 +532,9 @@ class MapBuilder:
         Args:
             use_analytical_method (bool, optional): Whether to use the analytical gradient method.
                 If None, uses the value from config if enhanced features are enabled.
+            skip_interpolation (bool, optional): Whether to skip interpolation to regular grid.
+                When True, only non-uniform data is stored, which significantly improves performance.
+                Default is True.
         """
         # Determine if we should use the analytical method
         if use_analytical_method is None and self.enable_enhanced_features:
@@ -542,7 +545,7 @@ class MapBuilder:
         
         if use_analytical_method and self.enable_enhanced_features and _ENHANCED_FEATURES_AVAILABLE:
             self.logger.info("Computing gradient maps using analytical method (enhanced feature).")
-            return self._compute_analytical_gradient_maps()
+            return self._compute_analytical_gradient_maps(skip_interpolation=skip_interpolation)
         
         # Legacy interpolation-based method
         if not self.inverse_maps:
@@ -550,6 +553,22 @@ class MapBuilder:
             return
 
         self.gradient_maps = []
+        
+        # If skipping interpolation, just store non-uniform data
+        if skip_interpolation:
+            self.logger.info(f"Computing gradient maps for {len(self.inverse_maps)} inverse maps (skipping interpolation)")
+            for i, inverse_map_nu in enumerate(self.inverse_maps):
+                # Convert to float32 for memory efficiency
+                inverse_map_nu = inverse_map_nu.astype(np.float32)
+                
+                # Store the non-uniform data directly
+                self._save_to_hdf5(self.data_file, f"inverse_map_nu_{i}", inverse_map_nu)
+                self.logger.info(f"Inverse map {i} stored without interpolation.")
+            
+            self.logger.info(f"Stored {len(self.inverse_maps)} inverse maps without interpolation.")
+            return
+            
+        # Regular interpolation-based method
         self.logger.info(f"Computing gradient maps for {len(self.inverse_maps)} inverse maps using optimized interpolation.")
 
         # Define source points (non-uniform) - convert to float32 for memory efficiency
@@ -615,12 +634,17 @@ class MapBuilder:
 
         self.logger.info(f"Computed gradient maps for {len(self.gradient_maps)} maps, each with {self.n_trans} transforms, using optimized interpolation.")
 
-    def _compute_analytical_gradient_maps(self):
+    def _compute_analytical_gradient_maps(self, skip_interpolation=True):
         """
         Compute gradient maps analytically in k-space using enhanced features.
         
         This is more efficient than the interpolation-based method as it requires only
         one inverse transform per mask instead of first computing inverse maps and then gradients.
+        
+        Args:
+            skip_interpolation (bool, optional): Whether to skip interpolation to regular grid.
+                When True, only non-uniform data is stored, which significantly improves performance.
+                Default is True.
         """
         if self.fft_result is None:
             self.logger.error("Forward FFT must be computed before analytical gradient maps.")
@@ -653,39 +677,49 @@ class MapBuilder:
             # Save the analytical gradient results
             self._save_to_hdf5(self.enhanced_file, f"analytical_gradient_map_{i}", gradient_magnitude_nu)
             
-            # Also store it in legacy format for backward compatibility
-            # This requires interpolation onto a uniform grid
-            points_nu = np.stack((self.x_coords_1d, self.y_coords_1d, self.z_coords_1d), axis=-1)
-            grid_x = np.linspace(self.x_coords_1d.min(), self.x_coords_1d.max(), self.nx)
-            grid_y = np.linspace(self.y_coords_1d.min(), self.y_coords_1d.max(), self.ny)
-            grid_z = np.linspace(self.z_coords_1d.min(), self.z_coords_1d.max(), self.nz)
-            
-            X, Y, Z = np.meshgrid(grid_x, grid_y, grid_z, indexing='ij')
-            points_u = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-            
-            gradient_magnitude_grid = np.zeros((self.n_trans, self.nx, self.ny, self.nz), dtype=self.real_dtype)
-            
-            for t in range(self.n_trans):
-                fill_val = np.mean(gradient_magnitude_nu[t])
-                interpolated_data_flat = griddata(
-                    points_nu, 
-                    gradient_magnitude_nu[t],
-                    points_u, 
-                    method='linear',
-                    fill_value=fill_val
-                )
-                gradient_magnitude_grid[t] = interpolated_data_flat.reshape(self.nx, self.ny, self.nz)
-            
-            # Add to both collections for backwards compatibility
+            # Add to collection
             self.analytical_gradient_maps.append(gradient_magnitude_nu)
-            self.gradient_maps.append(gradient_magnitude_grid)
             
-            # Save in the normal format too
-            self._save_to_hdf5(self.data_file, f"gradient_map_{i}", gradient_magnitude_grid)
+            # Skip interpolation if requested, otherwise do interpolation for backward compatibility
+            if not skip_interpolation:
+                # This requires interpolation onto a uniform grid
+                self.logger.info(f"Interpolating analytical gradient map {i} onto regular grid")
+                points_nu = np.stack((self.x_coords_1d, self.y_coords_1d, self.z_coords_1d), axis=-1)
+                grid_x = np.linspace(self.x_coords_1d.min(), self.x_coords_1d.max(), self.nx)
+                grid_y = np.linspace(self.y_coords_1d.min(), self.y_coords_1d.max(), self.ny)
+                grid_z = np.linspace(self.z_coords_1d.min(), self.z_coords_1d.max(), self.nz)
+                
+                X, Y, Z = np.meshgrid(grid_x, grid_y, grid_z, indexing='ij')
+                points_u = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+                
+                gradient_magnitude_grid = np.zeros((self.n_trans, self.nx, self.ny, self.nz), dtype=self.real_dtype)
+                
+                for t in range(self.n_trans):
+                    fill_val = np.mean(gradient_magnitude_nu[t])
+                    interpolated_data_flat = griddata(
+                        points_nu, 
+                        gradient_magnitude_nu[t],
+                        points_u, 
+                        method='linear',
+                        fill_value=fill_val
+                    )
+                    gradient_magnitude_grid[t] = interpolated_data_flat.reshape(self.nx, self.ny, self.nz)
+                
+                # Add to gradient_maps collection for backward compatibility
+                self.gradient_maps.append(gradient_magnitude_grid)
+                
+                # Save interpolated version too
+                self._save_to_hdf5(self.data_file, f"gradient_map_{i}", gradient_magnitude_grid)
+                self.logger.info(f"Interpolated analytical gradient map {i} saved")
+            else:
+                # Just store the non-uniform data directly in gradient_maps for simplicity
+                self.gradient_maps.append(gradient_magnitude_nu)
+                self.logger.info(f"Analytical gradient map {i} computed and saved (no interpolation)")
             
-            self.logger.info(f"Analytical gradient map {i} computed and saved")
-            
-        self.logger.info(f"Computed analytical gradient maps for {len(self.kspace_masks)} masks")
+        if skip_interpolation:
+            self.logger.info(f"Computed analytical gradient maps for {len(self.kspace_masks)} masks (no interpolation)")
+        else:
+            self.logger.info(f"Computed analytical gradient maps for {len(self.kspace_masks)} masks with interpolation")
         return True
 
     def compute_enhanced_metrics(self, metrics_to_run=None):
@@ -945,7 +979,7 @@ class MapBuilder:
         return self.analysis_results
 
     def process_map(self, n_centers=2, radius=0.5, analyses_to_run=['magnitude'], k_neighbors_local_var=5,
-                  use_analytical_gradient=None):
+                  use_analytical_gradient=None, skip_interpolation=True):
         """Run the main processing steps: FFT, masks, inverse, gradients, and analysis.
         
         Args:
@@ -955,11 +989,14 @@ class MapBuilder:
             k_neighbors_local_var (int, optional): k for local variance. Defaults to 5.
             use_analytical_gradient (bool, optional): Whether to use analytical gradient.
                 If None, uses the value from config if enhanced features enabled.
+            skip_interpolation (bool, optional): Whether to skip interpolation to regular grid.
+                When True, only non-uniform data is stored, which significantly improves performance.
+                Default is True.
         """
         self.compute_forward_fft()
         self.generate_kspace_masks(n_centers=n_centers, radius=radius)
         self.compute_inverse_maps()
-        self.compute_gradient_maps(use_analytical_method=use_analytical_gradient)
+        self.compute_gradient_maps(use_analytical_method=use_analytical_gradient, skip_interpolation=skip_interpolation)
         
         # Determine if any enhanced metrics are requested
         enhanced_requested = any(a in ['spectral_slope', 'spectral_entropy', 'anisotropy', 
