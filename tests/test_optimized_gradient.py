@@ -78,32 +78,17 @@ def report_memory_usage():
 
 def run_performance_comparison():
     """Run performance comparison between with and without interpolation"""
-    # Input path
-    input_dir = Path("/media/brainlab-uwo/Data1/Results/Full_pipeline_test_5_new_module/derivatives/sub-17017/func")
+    # Generate synthetic data
+    n_points = 1000
+    n_trans = 5
     
-    # Find the NIfTI file
-    nifti_files = list(input_dir.glob("*.nii.gz"))
-    if not nifti_files:
-        raise FileNotFoundError(f"No NIfTI files found in {input_dir}")
+    # Create random coordinates
+    x = np.random.uniform(-np.pi, np.pi, n_points)
+    y = np.random.uniform(-np.pi, np.pi, n_points)
+    z = np.random.uniform(-np.pi, np.pi, n_points)
     
-    input_file = nifti_files[0]
-    logger.info(f"Processing file: {input_file}")
-    
-    # Performance optimization parameters
-    downsample_factor = 3  # Spatial downsampling factor
-    time_slice = slice(0, None, 2)  # Use every other time point
-    
-    # Load the data with downsampling
-    logger.info(f"Loading data with downsample_factor={downsample_factor}, time_slice={time_slice}")
-    coords, data, affine, grid_dims = load_nifti_data(
-        input_file, 
-        downsample_factor=downsample_factor,
-        time_slice=time_slice
-    )
-    
-    # Convert data to complex (if it's not already)
-    if not np.iscomplexobj(data):
-        data = data.astype(np.complex128)  # Required by FINUFFT
+    # Create complex data
+    data = np.random.randn(n_trans, n_points) + 1j * np.random.randn(n_trans, n_points)
     
     # Create output directory
     output_dir = Path("./test_output")
@@ -114,14 +99,14 @@ def run_performance_comparison():
         {
             "name": "with_interpolation",
             "skip_interpolation": False,
-            "subject_id": "sub-17017-with-interp",
-            "export_nifti": True  # NIfTI export requires interpolation
+            "subject_id": "synthetic-with-interp",
+            "export_nifti": False
         },
         {
             "name": "without_interpolation",
             "skip_interpolation": True,
-            "subject_id": "sub-17017-no-interp",
-            "export_nifti": False  # Skip NIfTI export since we're skipping interpolation
+            "subject_id": "synthetic-no-interp",
+            "export_nifti": False
         }
     ]
     
@@ -135,24 +120,18 @@ def run_performance_comparison():
         # Run analytical gradient calculation
         logger.info(f"Calculating analytical gradient ({test['name']})...")
         calc_results = calculate_analytical_gradient(
-            x=coords[:, 0],
-            y=coords[:, 1],
-            z=coords[:, 2],
+            x=x,
+            y=y,
+            z=z,
             strengths=data,
             subject_id=test['subject_id'],
             output_dir=output_dir,
-            # Specify grid dimensions
-            nx=grid_dims[0],
-            ny=grid_dims[1],
-            nz=grid_dims[2],
-            estimate_grid=False,
             eps=1e-5,
             dtype='complex128',
             export_nifti=test['export_nifti'],
-            affine_transform=affine,
             average=True,
             upsampling_factor=1.5,
-            skip_interpolation=test['skip_interpolation']  # This is the key parameter we're testing
+            skip_interpolation=test['skip_interpolation']
         )
         
         end_time = time.time()
@@ -162,7 +141,7 @@ def run_performance_comparison():
         execution_time = end_time - start_time
         results[test['name']] = {
             "execution_time": execution_time,
-            "output_size": len(str(calc_results)),  # Rough estimate of result size
+            "output_size": len(str(calc_results)),
             "gradient_shape": calc_results['gradient_map_nu'].shape,
             "has_grid": 'gradient_map_grid' in calc_results,
         }
