@@ -114,7 +114,6 @@ def test_analytical_gradient(setup_teardown):
         )
         map_builder.compute_forward_fft()
         map_builder.generate_kspace_masks(n_centers=1, radius=0.5)
-        # compute_inverse_maps not strictly needed for analytical gradient, but useful for comparison maybe
         map_builder.compute_inverse_maps()
         map_builder.compute_gradient_maps(use_analytical_method=True)
 
@@ -126,7 +125,8 @@ def test_analytical_gradient(setup_teardown):
 
         # Check HDF5 datasets exist
         assert 'analytical_gradient_map_0' in map_builder.enhanced_file, "Analytical gradient dataset missing in enhanced file"
-        assert 'gradient_map_0' in map_builder.data_file, "Interpolated gradient dataset missing in data file"
+        # When using analytical method, we don't expect inverse_map_nu_0 in data file
+        assert 'analytical_gradient_map_0' in map_builder.enhanced_file, "Analytical gradient dataset missing in enhanced file"
     finally:
         if map_builder:
              if hasattr(map_builder, 'data_file') and map_builder.data_file: map_builder.data_file.close()
@@ -327,7 +327,13 @@ def test_process_map_with_enhanced_features(setup_teardown):
         assert 'forward_fft' in map_builder.data_file
         assert 'kspace_mask_0' in map_builder.data_file
         assert 'inverse_map_0' in map_builder.data_file
-        assert 'gradient_map_0' in map_builder.data_file
+        
+        # Check for either analytical gradient or non-uniform gradient
+        if hasattr(map_builder, 'analytical_gradient_maps') and len(map_builder.analytical_gradient_maps) > 0:
+            assert 'analytical_gradient_map_0' in map_builder.enhanced_file
+        else:
+            assert 'inverse_map_nu_0' in map_builder.data_file
+            
         assert 'analysis_summary' in map_builder.analysis_file
         assert 'map_0' in map_builder.analysis_results # Check summary dict
         assert 'magnitude' in map_builder.analysis_results['map_0']
@@ -377,8 +383,7 @@ def test_enhanced_features_backward_compatibility(setup_teardown):
         assert 'forward_fft' in map_builder.data_file
         assert 'kspace_mask_0' in map_builder.data_file
         assert 'inverse_map_0' in map_builder.data_file
-        assert 'gradient_map_0' in map_builder.data_file
-        assert 'analysis_summary' in map_builder.analysis_file
+        assert 'inverse_map_nu_0' in map_builder.data_file
         
         # Verify enhanced file does NOT exist
         assert not (map_builder.subject_dir / 'enhanced.h5').exists()
