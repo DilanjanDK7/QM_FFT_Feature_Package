@@ -44,7 +44,8 @@ class TestAnalyticalGradient:
         results = calculate_analytical_gradient(
             x=x, y=y, z=z, strengths=strengths,
             output_dir=None,
-            average=True
+            average=True,
+            skip_interpolation=False
         )
         
         # Check that the results dictionary contains expected keys
@@ -80,7 +81,8 @@ class TestAnalyticalGradient:
         results = calculate_analytical_gradient(
             x=x, y=y, z=z, strengths=strengths,
             output_dir=None,
-            average=False
+            average=False,
+            skip_interpolation=False
         )
         
         # Check that average values are not in results
@@ -102,7 +104,8 @@ class TestAnalyticalGradient:
         results = calculate_analytical_gradient(
             x=x, y=y, z=z, strengths=single_strength,
             output_dir=None,
-            average=True  # Even with average=True, no averaging happens with single time point
+            average=True,  # Even with average=True, no averaging happens with single time point
+            skip_interpolation=False
         )
         
         # Check that results have correct shapes
@@ -123,7 +126,8 @@ class TestAnalyticalGradient:
             x=x, y=y, z=z, strengths=strengths,
             subject_id=subject_id,
             output_dir=temp_dir,
-            average=True
+            average=True,
+            skip_interpolation=False
         )
         
         # Check that directories were created
@@ -175,7 +179,8 @@ class TestAnalyticalGradient:
                 subject_id=subject_id,
                 output_dir=temp_dir,
                 average=True,
-                export_nifti=True
+                export_nifti=True,
+                skip_interpolation=False
             )
             
             # Check that NIfTI files were created
@@ -201,7 +206,8 @@ class TestAnalyticalGradient:
             x=x, y=y, z=z, strengths=strengths,
             nx=nx, ny=ny, nz=nz,
             estimate_grid=False,
-            output_dir=None
+            output_dir=None,
+            skip_interpolation=False
         )
         
         # Check that grid dimensions match what we specified
@@ -290,7 +296,8 @@ class TestAnalyticalGradient:
                 x=x, y=y, z=z, strengths=f,
                 output_dir=None,
                 average=False,
-                upsampling_factor=factor
+                upsampling_factor=factor,
+                skip_interpolation=False
             )
             
             # Extract computed gradient and grid dimensions

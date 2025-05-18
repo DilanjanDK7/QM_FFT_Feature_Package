@@ -120,10 +120,11 @@ def test_preprocessing_to_mapbuilder(setup_teardown):
         assert map_builder.inverse_maps[0].shape == (data["n_selected_times"], data["n_sources"])
         assert 'inverse_map_0' in map_builder.data_file # Check HDF5 dataset
 
-        # Check gradients were computed
+        # Check gradients were computed (with skip_interpolation=True by default)
         assert len(map_builder.inverse_maps) == 2
-        assert 'inverse_map_nu_0' in map_builder.data_file
-        assert 'inverse_map_nu_1' in map_builder.data_file
+        assert len(map_builder.analytical_gradient_maps) == 2
+        assert 'analytical_gradient_map_0' in map_builder.enhanced_file
+        assert 'analytical_gradient_map_1' in map_builder.enhanced_file
 
         # Verify analysis output (basic checks)
         assert 'map_0' in map_builder.analysis_results
@@ -251,8 +252,9 @@ def test_full_pipeline_performance(setup_teardown):
         
         # Basic check that results were generated
         assert len(map_builder.inverse_maps) > 0
-        assert 'inverse_map_nu_0' in map_builder.data_file
-        assert 'inverse_map_nu_1' in map_builder.data_file
+        assert len(map_builder.analytical_gradient_maps) > 0
+        assert 'analytical_gradient_map_0' in map_builder.enhanced_file
+        assert 'analytical_gradient_map_1' in map_builder.enhanced_file
         assert len(map_builder.analysis_results) > 0
         assert 'analysis_summary' in map_builder.analysis_file # Check summary group exists
 

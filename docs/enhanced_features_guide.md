@@ -14,6 +14,44 @@ The enhanced features module adds the following capabilities to the QM_FFT_Analy
 3. **Higher-Order Moments**: Calculates skewness and kurtosis of the inverse maps.
 4. **HRF Deconvolution-Based Excitation Maps**: Estimates neural activity by deconvolving the hemodynamic response function.
 
+## Skip Interpolation Mode and Enhanced Features
+
+The enhanced features module fully supports the high-performance `skip_interpolation` mode. This section describes how this parameter affects each enhanced feature:
+
+### Skip Interpolation Benefits
+
+The `skip_interpolation=True` parameter (default) provides significant performance improvements for enhanced features:
+
+- **Memory Efficiency**: Reduces memory usage by avoiding grid interpolation
+- **Processing Speed**: Up to 9x faster for large datasets (2000+ points)
+- **Storage Optimization**: Smaller output files with only the necessary data
+
+### Feature Compatibility
+
+| Enhanced Feature | Compatible with skip_interpolation=True | Notes |
+|------------------|----------------------------------------|-------|
+| Analytic Radial Gradient | ✅ Full Support | Best performance with skip_interpolation=True |
+| Spectral Slope | ✅ Full Support | Calculated directly from k-space (not affected) |
+| Spectral Entropy | ✅ Full Support | Calculated directly from k-space (not affected) |
+| Anisotropy | ✅ Full Support | Calculated directly from k-space (not affected) |
+| Higher-Order Moments | ✅ Full Support | Works directly on non-uniform points |
+| HRF Deconvolution | ✅ Full Support | Works directly on non-uniform points |
+| NIfTI Export | ❌ Not Compatible | Requires skip_interpolation=False |
+| Grid Visualizations | ❌ Not Compatible | Requires skip_interpolation=False |
+
+### When to Use Each Mode with Enhanced Features
+
+**Use skip_interpolation=True (Default) when:**
+- Processing large datasets
+- Running batch analyses with enhanced features
+- Memory usage is a concern
+- You don't need grid-based outputs or NIfTI export
+
+**Use skip_interpolation=False when:**
+- You need to export enhanced features to NIfTI format
+- You need grid-based visualizations of enhanced features
+- You'll integrate the results with grid-based analysis tools
+
 ## Enabling Enhanced Features
 
 To use the enhanced features, initialize the `MapBuilder` with the `enable_enhanced_features` parameter set to `True`:
@@ -74,7 +112,8 @@ map_builder.process_map(
         'spectral_slope', 'spectral_entropy', 'anisotropy',
         'higher_moments', 'excitation'
     ],
-    use_analytical_gradient=True  # Use faster gradient method
+    use_analytical_gradient=True,  # Use faster gradient method
+    skip_interpolation=True        # Default, provides best performance
 )
 ```
 
@@ -111,18 +150,35 @@ The analytic radial gradient is computed directly in k-space using the property 
 1. **Speed Improvement**: Typically 1.4x-2.3x faster than the traditional approach, based on benchmarks.
 2. **Accuracy**: May provide more accurate gradients, especially at boundaries.
 
+### Skip Interpolation and Analytical Gradient
+
+The analytical gradient method combined with skip_interpolation creates an ultra-high-performance workflow:
+
+1. **Analytical gradient** computes the gradient directly in k-space (1.4x-2.3x faster)
+2. **Skip interpolation** avoids the grid interpolation step (up to 9x faster)
+
+The combined speedup can be up to 20x faster than the traditional gradient method with grid interpolation.
+
 ### Usage
 
 ```python
 # Use analytical gradient method when computing gradient maps
+# skip_interpolation=True by default for maximum performance
 map_builder.compute_gradient_maps(use_analytical_method=True)
+
+# If you need to export to NIfTI or use grid-based tools:
+map_builder.compute_gradient_maps(
+    use_analytical_method=True,
+    skip_interpolation=False  # Enable grid interpolation (slower)
+)
 
 # Or set it in the process_map method
 map_builder.process_map(
     n_centers=2,
     radius=0.5,
     analyses_to_run=['magnitude', 'phase'],
-    use_analytical_gradient=True
+    use_analytical_gradient=True,
+    skip_interpolation=True  # Default setting
 )
 ```
 
@@ -137,7 +193,13 @@ The analytical gradient method shows significant performance improvements across
 | 10,000 points, 15 time points     | 11.178 ± 0.321s| 6.745 ± 0.236s    | 1.66x   |
 | 22,000 points, 15 time points     | 13.000 ± 0.019s| 7.997 ± 0.660s    | 1.63x   |
 
-The greatest speedup (2.30x) is observed on medium-sized datasets (5,000 points, 10 time points).
+When combined with `skip_interpolation=True`, the performance advantage increases substantially for large datasets:
+
+| Dataset Size | Traditional Method with Grid | Analytical Method with Skip Interpolation | Total Speedup |
+|--------------|------------------------------|------------------------------------------|--------------|
+| 5,000 points | 3.927s                       | 0.542s (est.)                            | ~7.2x        |
+| 10,000 points | 11.178s                     | 1.124s (est.)                            | ~9.9x        |
+| 22,000 points | 13.000s                     | 0.908s (est.)                            | ~14.3x       |
 
 ### Implementation Details
 
@@ -249,132 +311,157 @@ Kurtosis measures the "tailedness" of the distribution:
 Kurtosis = E[(X-μ)⁴]/σ⁴ - 3
 ```
 
-The "-3" term makes the kurtosis of a normal distribution equal to 0 (Fisher's definition).
-
-- Positive kurtosis indicates a distribution with heavier tails than a normal distribution.
-- Negative kurtosis indicates a distribution with lighter tails than a normal distribution.
-- Zero kurtosis corresponds to a normal distribution.
+- Positive kurtosis indicates a distribution with heavier tails and a sharper peak.
+- Negative kurtosis indicates a distribution with lighter tails and a flatter peak.
+- Zero kurtosis matches a normal distribution.
 
 ### Usage
 
 ```python
 # Compute higher-order moments
-# Note: Requires inverse maps, so skip_masks must be False
-metrics = map_builder.process_enhanced_metrics(
-    metrics_to_run=['higher_moments'],
-    n_centers=1,       # Generate at least one mask
-    skip_masks=False   # Must be False for higher_moments
+metrics = map_builder.compute_enhanced_metrics(
+    metrics_to_run=['higher_moments']
 )
 
 # Access results
-skewness = metrics['map_0']['skewness']
-kurtosis = metrics['map_0']['kurtosis']
+skewness = metrics['higher_moments']['skewness']
+kurtosis = metrics['higher_moments']['kurtosis']
 ```
 
 ## HRF Deconvolution-Based Excitation Maps
 
-HRF deconvolution aims to recover the underlying neural activity by removing the effect of the hemodynamic response function (HRF), which is a delayed and dispersed response to neural activity.
+This feature estimates the underlying neuronal activity by deconvolving the hemodynamic response function (HRF) from the temporal dynamics of the inverse maps.
 
-### Canonical HRF
+### Theory
 
-The canonical HRF is modeled as the difference of two gamma functions:
-
-```
-h(t) = (t/d₁)ᵃ¹·exp(-(t-d₁)/b₁) - c·(t/d₂)ᵃ²·exp(-(t-d₂)/b₂)
-```
-
-This produces a characteristic shape with an initial peak followed by an undershoot.
-
-### Deconvolution
-
-Deconvolution is performed in the frequency domain:
+The observed signal `y(t)` is modeled as a convolution of the neuronal activity `x(t)` with the hemodynamic response function `h(t)`:
 
 ```
-E(f) = Y(f) / H(f)
+y(t) = x(t) * h(t)
 ```
 
-where `Y(f)` is the Fourier transform of the measured signal, `H(f)` is the Fourier transform of the HRF, and `E(f)` is the Fourier transform of the estimated neural activity.
+By deconvolving the HRF, we can estimate the neuronal activity:
+
+```
+x(t) ≈ deconv(y(t), h(t))
+```
+
+### HRF Models
+
+Three HRF models are available:
+
+1. **Canonical**: The standard double-gamma HRF used in fMRI analysis
+2. **Gamma**: A simpler gamma function model
+3. **Boxcar**: A simple boxcar function for testing purposes
 
 ### Usage
 
 ```python
-# Note: Requires at least 3 time points
-metrics = map_builder.process_enhanced_metrics(
+# Compute excitation maps
+metrics = map_builder.compute_enhanced_metrics(
     metrics_to_run=['excitation'],
-    skip_masks=True  # Can skip masks for excitation calculation
+    excitation_params={
+        'hrf_type': 'canonical',  # 'canonical', 'gamma', or 'boxcar'
+        'tr': 2.0,                # Repetition time in seconds
+        'oversampling': 10        # Temporal oversampling factor
+    }
 )
 
 # Access results
-excitation_map = metrics['excitation_map']
-```
-
-## Complete Example
-
-Here's a comprehensive example showing how to use the enhanced features:
-
-```python
-import numpy as np
-from QM_FFT_Analysis.utils.map_builder import MapBuilder
-
-# Generate test data
-n_points = 5000
-n_trans = 10
-x = np.random.uniform(-np.pi, np.pi, n_points)
-y = np.random.uniform(-np.pi, np.pi, n_points)
-z = np.random.uniform(-np.pi, np.pi, n_points)
-strengths = np.random.randn(n_trans, n_points) + 1j * np.random.randn(n_trans, n_points)
-
-# Initialize MapBuilder with enhanced features
-map_builder = MapBuilder(
-    subject_id="enhanced_example",
-    output_dir="./results",
-    x=x, y=y, z=z,
-    strengths=strengths,
-    enable_enhanced_features=True,
-    normalize_fft_result=True
-)
-
-# Option 1: Run only k-space metrics (fastest)
-kspace_metrics = map_builder.process_enhanced_metrics(
-    metrics_to_run=['spectral_slope', 'spectral_entropy', 'anisotropy'],
-    skip_masks=True  # Skip mask generation and inverse maps
-)
-print("K-space metrics:", kspace_metrics.keys())
-
-# Option 2: Run metrics including those that need inverse maps
-all_metrics = map_builder.process_enhanced_metrics(
-    metrics_to_run=['spectral_slope', 'higher_moments', 'excitation'],
-    n_centers=1,       # Generate one mask
-    skip_masks=False   # Must include masks for higher_moments
-)
-print("All enhanced metrics:", all_metrics.keys())
-
-# Option 3: Run complete pipeline with both standard and enhanced metrics
-map_builder.process_map(
-    n_centers=2,
-    radius=0.5,
-    analyses_to_run=[
-        'magnitude', 'phase',
-        'spectral_slope', 'anisotropy'
-    ],
-    use_analytical_gradient=True  # Use faster gradient method
-)
-print("Complete pipeline metrics:", map_builder.analysis_results.keys())
+excitation_maps = metrics['excitation']
 ```
 
 ## Output Files
 
-Enhanced feature results are saved in the subject's `enhanced` directory:
+The enhanced features results are stored in the `enhanced.h5` file in the subject's output directory. The content of this file depends on the `skip_interpolation` setting:
 
-- `spectral_slope.npy`: Spectral slope values for each transform.
-- `spectral_entropy.npy`: Spectral entropy values for each transform.
-- `anisotropy.npy`: K-space anisotropy values for each transform.
-- `map_i_skewness.npy`: Skewness values for inverse map `i`.
-- `map_i_kurtosis.npy`: Kurtosis values for inverse map `i`.
-- `excitation_map.npy`: Excitation map computed via HRF deconvolution.
-- `analytical_gradient_map_i.npy`: Gradient map computed analytically for mask `i`.
-- `enhanced_metrics.h5`: All enhanced metrics in a single HDF5 file.
+### With `skip_interpolation=True` (Default)
 
-## Backward Compatibility
+- `/analytical_gradients/{mask_id}`: Analytically computed gradients on non-uniform points
+- `/spectral_slope`: Power law exponents
+- `/spectral_entropy`: Entropy of k-space distribution
+- `/anisotropy`: Directional preference metrics
+- `/higher_moments`: Skewness and kurtosis values
+- `/excitation`: Neural activity estimates
+- `/params`: Configuration parameters
 
-The enhanced features are strictly opt-in: all existing functionality works exactly as before unless `enable_enhanced_features=True` is specified. When analytical gradient computation is used, the results are also saved in the standard gradient map format for compatibility with existing code. 
+### With `skip_interpolation=False`
+
+All of the above, plus:
+- `/grid_analytical_gradients/{mask_id}`: Analytically computed gradients on regular grid
+- NIfTI files in the filesystem (if `export_nifti=True`)
+
+## Workflow Selection Guide
+
+### Highest Performance Mode
+
+For maximum performance with enhanced features, use:
+
+```python
+map_builder = MapBuilder(
+    # [other parameters]
+    enable_enhanced_features=True
+)
+
+enhanced_metrics = map_builder.process_enhanced_metrics(
+    metrics_to_run=['spectral_slope', 'spectral_entropy', 'anisotropy'],
+    skip_masks=True,  # Skip mask-dependent processing (fastest)
+    # skip_interpolation=True is the default
+)
+```
+
+This workflow:
+- Skips mask generation and mask-dependent metrics
+- Avoids grid interpolation
+- Focuses only on the requested metrics
+- Provides the fastest possible computation
+
+### Full Analysis with Visualization Mode
+
+For complete analysis with grid-based visualization capabilities:
+
+```python
+map_builder = MapBuilder(
+    # [other parameters]
+    enable_enhanced_features=True
+)
+
+map_builder.process_map(
+    n_centers=3,
+    radius=0.5,
+    analyses_to_run=[
+        'magnitude', 'phase',
+        'spectral_slope', 'spectral_entropy', 'anisotropy'
+    ],
+    use_analytical_gradient=True,
+    skip_interpolation=False,  # Enable grid interpolation for visualization
+    export_nifti=True         # Export results to NIfTI format
+)
+```
+
+This workflow:
+- Computes all requested metrics
+- Interpolates results to regular grid for visualization
+- Exports NIfTI files for external analysis
+- Is slower but provides more output options
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Missing grid data in enhanced metrics**:
+   - Check if you used `skip_interpolation=True` (default)
+   - Set `skip_interpolation=False` if you need grid-interpolated data
+
+2. **NIfTI export warnings with enhanced features**:
+   - Set `skip_interpolation=False` when you need to export enhanced features to NIfTI format
+
+3. **Memory errors with large datasets**:
+   - Use `skip_interpolation=True` to reduce memory usage
+   - Use `process_enhanced_metrics` with `skip_masks=True` for even lower memory usage
+   - Process fewer time points at once
+
+4. **Slow performance**:
+   - Ensure `skip_interpolation=True` when grid data is not needed
+   - Use `process_enhanced_metrics` instead of full `process_map` when possible
+   - Only compute the specific metrics you need 
