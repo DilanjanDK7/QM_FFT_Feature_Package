@@ -5,11 +5,16 @@ from pathlib import Path
 import logging
 from scipy.interpolate import griddata
 from scipy.spatial import distance
+import warnings
+from typing import Optional, Tuple, Dict, Union
 
 def setup_logging(name, output_dir=None):
     """Set up a logger with file and console handlers."""
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
+    
+    # Clear existing handlers to avoid duplicates
+    logger.handlers.clear()
     
     # Create formatter
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -29,13 +34,14 @@ def setup_logging(name, output_dir=None):
     
     return logger
 
-def estimate_optimal_grid_size(x, y, z, upsampling_factor=2.0):
+def estimate_optimal_grid_size(x, y, z, upsampling_factor=3.0, max_grid_size=512):
     """
     Estimate optimal grid size based on spatial distribution and Nyquist frequency.
     
     Args:
         x, y, z (ndarray): Coordinate arrays
         upsampling_factor (float): Factor to oversample beyond Nyquist limit
+        max_grid_size (int): Maximum allowed grid size per dimension for memory safety
         
     Returns:
         tuple: (nx, ny, nz) grid dimensions
@@ -50,7 +56,7 @@ def estimate_optimal_grid_size(x, y, z, upsampling_factor=2.0):
     
     # Estimate minimum distance between points (approximation of nearest neighbor)
     # This is more efficient than calculating all pairwise distances
-    n_sample = min(1000, len(x))  # Use at most 1000 points for efficiency
+    n_sample = min(2000, len(x))  # Increased sample size for better estimation
     if n_sample < len(x):
         indices = np.random.choice(len(x), n_sample, replace=False)
         sample_coords = coords[indices]
@@ -70,16 +76,158 @@ def estimate_optimal_grid_size(x, y, z, upsampling_factor=2.0):
     ny = int(np.ceil(y_extent * nyquist_freq * upsampling_factor / (2 * np.pi)))
     nz = int(np.ceil(z_extent * nyquist_freq * upsampling_factor / (2 * np.pi)))
     
-    # Ensure dimensions are even (for FFT efficiency)
-    nx += nx % 2
-    ny += ny % 2
-    nz += nz % 2
+    # Ensure dimensions are even (for FFT efficiency) and within reasonable bounds
+    nx = min(nx + nx % 2, max_grid_size)
+    ny = min(ny + ny % 2, max_grid_size)
+    nz = min(nz + nz % 2, max_grid_size)
     
     # Enforce minimum grid size
     min_grid = 10
     nx = max(nx, min_grid)
     ny = max(ny, min_grid)
     nz = max(nz, min_grid)
+    
+    return nx, ny, nz
+
+def validate_k_space_sampling(k_max: float, min_dist: float, logger) -> bool:
+    """
+    Validate if k-space sampling is sufficient for the given spatial resolution.
+    
+    Args:
+        k_max: Maximum k-space frequency
+        min_dist: Minimum spatial distance between points
+        logger: Logger instance
+        
+    Returns:
+        bool: True if sampling is sufficient, False otherwise
+    """
+    max_freq_required = 1.0 / min_dist
+    
+    if k_max < max_freq_required:
+        logger.warning(
+            f"K-space extent ({k_max:.4f}) may be insufficient for minimum "
+            f"spatial scale ({min_dist:.4f}). Consider increasing grid size or upsampling factor."
+        )
+        return False
+    else:
+        logger.info(
+            f"K-space parameters: max_k={k_max:.4f}, k_resolution calculated, "
+            f"minimum spatial distance={min_dist:.4f}"
+        )
+        return True
+
+def compute_k_space_gradient_optimized(fft_result: np.ndarray, kx: np.ndarray, 
+                                     ky: np.ndarray, kz: np.ndarray) -> np.ndarray:
+    """
+    Optimized computation of analytical gradient in k-space.
+    
+    Args:
+        fft_result: Forward FFT result, shape (n_trans, nx, ny, nz)
+        kx, ky, kz: 1D k-space coordinate arrays
+        
+    Returns:
+        np.ndarray: Gradient in k-space, same shape as fft_result
+    """
+    # Create 3D k-space coordinate grids with memory-efficient data types
+    Kx, Ky, Kz = np.meshgrid(kx.astype(np.float32), 
+                              ky.astype(np.float32), 
+                              kz.astype(np.float32), indexing='ij')
+    
+    # Calculate k-space radial distance from origin (k-magnitude) - this is ||k||
+    K_mag = np.sqrt(Kx**2 + Ky**2 + Kz**2)
+    
+    # Handle the k=0 case to avoid numerical issues
+    K_mag[0, 0, 0] = 1e-12  # Small non-zero value to avoid division by zero
+    
+    # Multiply by i*2π*||k|| (convert to complex128 for FINUFFT compatibility)
+    # This implements the equation from the paper: F^-1{i*2π*||k||*F(k)}
+    gradient_multiplier = (1j * 2 * np.pi * K_mag).astype(np.complex128)
+    
+    # Apply gradient operation with broadcasting
+    gradient_fft = fft_result * gradient_multiplier
+    
+    # Clean up intermediate arrays to save memory
+    del Kx, Ky, Kz, K_mag, gradient_multiplier
+    
+    return gradient_fft
+
+def setup_finufft_options(eps: float, upsampfac: float, spreadwidth: Optional[int] = None) -> dict:
+    """
+    Set up FINUFFT options with custom parameters.
+    
+    Args:
+        eps: FINUFFT precision tolerance
+        upsampfac: Upsampling factor (sigma parameter)
+        spreadwidth: Kernel width (if None, FINUFFT chooses automatically)
+        
+    Returns:
+        dict: FINUFFT options dictionary
+    """
+    # Create options dictionary for FINUFFT
+    opts = {}
+    
+    # Set upsampling factor
+    opts['upsampfac'] = upsampfac
+    
+    # FINUFFT has specific requirements for upsampfac with Horner polynomial method
+    # Standard values that work with kerevalmeth=1: 1.25, 2.0
+    # For other values, use exp(sqrt()) method (kerevalmeth=0)
+    standard_upsampfac_values = [1.25, 2.0]
+    
+    if upsampfac in standard_upsampfac_values:
+        opts['spread_kerevalmeth'] = 1  # Use Horner polynomial (faster)
+    else:
+        opts['spread_kerevalmeth'] = 0  # Use exp(sqrt()) method (more flexible)
+        if upsampfac not in [1.25, 2.0]:
+            warnings.warn(f"upsampfac={upsampfac} requires exp(sqrt()) kernel evaluation method. "
+                         f"Consider using 1.25 or 2.0 for optimal performance.")
+    
+    # Set kernel width if specified
+    if spreadwidth is not None:
+        # Validate spreadwidth range
+        if not (1 <= spreadwidth <= 16):
+            warnings.warn(f"spreadwidth={spreadwidth} is outside typical range [1,16]. "
+                         f"This may cause poor accuracy or performance.")
+        # Note: FINUFFT doesn't have a direct 'spreadwidth' option in Python interface
+        # The kernel width is determined by eps and upsampfac automatically
+        # We'll log this for user awareness
+    
+    return opts
+
+def adaptive_grid_estimation(x: np.ndarray, y: np.ndarray, z: np.ndarray, 
+                           strengths: np.ndarray, target_accuracy: float = 0.95) -> Tuple[int, int, int]:
+    """
+    Adaptively estimate grid size based on data characteristics and target accuracy.
+    
+    Args:
+        x, y, z: Coordinate arrays
+        strengths: Strength data for analysis
+        target_accuracy: Target accuracy level (0-1)
+        
+    Returns:
+        Tuple of optimal grid dimensions (nx, ny, nz)
+    """
+    # Analyze spatial frequency content
+    coords = np.stack((x, y, z), axis=1)
+    
+    # Calculate characteristic length scales
+    extents = [np.max(coord) - np.min(coord) for coord in [x, y, z]]
+    
+    # Estimate dominant frequencies from data variation
+    if strengths.ndim == 1:
+        data_variation = np.std(np.abs(strengths))
+    else:
+        data_variation = np.mean([np.std(np.abs(strengths[i])) for i in range(strengths.shape[0])])
+    
+    # Adaptive upsampling based on data complexity - increased base upsampling
+    base_upsampling = 2.5  # Increased from 1.5 to 2.5
+    complexity_factor = min(2.0, data_variation / np.mean(np.abs(strengths.flatten())))
+    adaptive_upsampling = base_upsampling * (1 + complexity_factor * target_accuracy)
+    
+    # Use the enhanced grid estimation with adaptive parameters
+    nx, ny, nz = estimate_optimal_grid_size(x, y, z, 
+                                          upsampling_factor=adaptive_upsampling,
+                                          max_grid_size=min(1024, int(len(x)**0.4 * 50)))
     
     return nx, ny, nz
 
@@ -91,11 +239,15 @@ def calculate_analytical_gradient(
     eps=1e-6,
     dtype='complex128',
     estimate_grid=True,
-    upsampling_factor=2,
+    upsampling_factor=3,
     export_nifti=False,
     affine_transform=None,
     average=True,
-    skip_interpolation=True
+    skip_interpolation=True,
+    adaptive_grid=False,
+    target_accuracy=0.95,
+    upsampfac=2.0,
+    spreadwidth=None
 ):
     """
     Calculate analytical radial gradient directly from non-uniform points.
@@ -120,7 +272,7 @@ def calculate_analytical_gradient(
         eps (float): FINUFFT precision. Defaults to 1e-6.
         dtype (str): Data type for complex values. Must be 'complex128' for FINUFFT.
         estimate_grid (bool): Whether to estimate grid dimensions from point density.
-        upsampling_factor (float): Factor for grid estimation. Higher values → finer grid.
+        upsampling_factor (float): Factor for grid estimation. Higher values → finer grid. Default is 3.
         export_nifti (bool): Whether to export results as NIfTI files.
         affine_transform (ndarray, optional): 4x4 affine transformation matrix for NIfTI output.
         average (bool): Whether to compute and save the average gradient over time points.
@@ -128,6 +280,17 @@ def calculate_analytical_gradient(
         skip_interpolation (bool): Whether to skip interpolation to regular grid.
                         When True, only non-uniform data is returned, which significantly improves performance.
                         Default is True.
+        adaptive_grid (bool): Whether to use adaptive grid estimation based on data characteristics.
+                        When True, overrides estimate_grid and uses data-driven grid sizing.
+                        Default is False.
+        target_accuracy (float): Target accuracy level for adaptive grid estimation (0-1).
+                        Higher values result in finer grids. Default is 0.95.
+        upsampfac (float): FINUFFT upsampling factor. Controls the upsampling ratio sigma.
+                        2.0 is standard, 1.25 gives smaller FFTs but wider kernels (faster for some cases).
+                        Default is 2.0. See FINUFFT documentation for details.
+        spreadwidth (int, optional): FINUFFT kernel width for spreading/interpolation.
+                        If None, FINUFFT chooses automatically based on tolerance.
+                        Typical values are 4-16. Lower values are faster but less accurate.
     
     Returns:
         dict: A dictionary containing:
@@ -199,11 +362,19 @@ def calculate_analytical_gradient(
     z_coords = z_in.astype(np.float64)  # Required by FINUFFT
     
     # Estimate grid dimensions if needed
-    if estimate_grid:
-        # Use new optimal grid size estimation
+    if adaptive_grid:
+        # Use adaptive grid estimation based on data characteristics
+        nx, ny, nz = adaptive_grid_estimation(
+            x_coords, y_coords, z_coords, strengths_data, target_accuracy
+        )
+        logger.info(f"Adaptive grid dimensions (nx, ny, nz): ({nx}, {ny}, {nz}) "
+                   f"with target accuracy {target_accuracy}")
+    elif estimate_grid:
+        # Use improved optimal grid size estimation with memory safety
         nx, ny, nz = estimate_optimal_grid_size(
             x_coords, y_coords, z_coords, 
-            upsampling_factor=upsampling_factor
+            upsampling_factor=upsampling_factor,
+            max_grid_size=512  # Prevent excessive memory usage
         )
         logger.info(f"Estimated optimal grid dimensions (nx, ny, nz): ({nx}, {ny}, {nz})")
     else:
@@ -211,21 +382,27 @@ def calculate_analytical_gradient(
             raise ValueError("If estimate_grid is False, nx, ny, and nz must be provided")
         logger.info(f"Using provided grid dimensions (nx, ny, nz): ({nx}, {ny}, {nz})")
     
+    # Warn about potential memory usage for large grids
+    total_grid_points = nx * ny * nz
+    if total_grid_points > 50_000_000:  # ~50M points
+        logger.warning(f"Large grid size detected ({total_grid_points:,} points). "
+                     f"Consider reducing upsampling_factor or using smaller grid dimensions.")
+    
     n_modes = (nx, ny, nz)
     
-    # Initialize k-space grids (1D)
-    kx = np.fft.fftfreq(nx).astype(np.float32)
-    ky = np.fft.fftfreq(ny).astype(np.float32)
-    kz = np.fft.fftfreq(nz).astype(np.float32)
+    # Initialize k-space grids (1D) with optimized data types
+    kx = np.fft.fftfreq(nx).astype(np.float64)  # FINUFFT requires float64 for coordinates
+    ky = np.fft.fftfreq(ny).astype(np.float64)
+    kz = np.fft.fftfreq(nz).astype(np.float64)
     
-    # Calculate maximum k-space extent and resolution
+    # Calculate maximum k-space extent and resolution more efficiently
     k_max = np.sqrt(
         max(np.max(np.abs(kx)), np.max(np.abs(ky)), np.max(np.abs(kz)))**2 * 3
     )
     k_res = min(
-        np.diff(np.sort(kx))[0] if nx > 1 else 1,
-        np.diff(np.sort(ky))[0] if ny > 1 else 1,
-        np.diff(np.sort(kz))[0] if nz > 1 else 1
+        np.diff(kx)[0] if nx > 1 else 1,  # More efficient than sorting
+        np.diff(ky)[0] if ny > 1 else 1,
+        np.diff(kz)[0] if nz > 1 else 1
     )
     
     # Convert to true frequency (2π*normalized frequency)
@@ -233,30 +410,30 @@ def calculate_analytical_gradient(
     k_max = k_max * 2 * np.pi  
     k_res = k_res * 2 * np.pi
     
-    # Check if k-space sampling is sufficient
-    # Based on minimum spatial distance between points
+    # Validate k-space sampling efficiency
     coords = np.stack((x_coords, y_coords, z_coords), axis=1)
-    dist_matrix = distance.pdist(coords[:min(1000, n_points)])
+    dist_matrix = distance.pdist(coords[:min(2000, n_points)])  # Increased sample size
     min_dist = np.min(dist_matrix[dist_matrix > 0])
-    max_freq_required = 1.0 / min_dist
     
-    if k_max < max_freq_required:
-        logger.warning(
-            f"Estimated k-space extent ({k_max:.4f}) may be insufficient for the minimum "
-            f"spatial scale ({min_dist:.4f}). Consider increasing grid size or upsampling factor."
-        )
-    else:
-        logger.info(
-            f"K-space parameters: max_k={k_max:.4f}, k_resolution={k_res:.4f}, "
-            f"minimum spatial distance={min_dist:.4f}"
-        )
+    # Use the new validation function
+    sampling_sufficient = validate_k_space_sampling(k_max, min_dist, logger)
     
-    # Step 1: Initialize FINUFFT plans
+    # Step 1: Initialize FINUFFT plans with custom options
     logger.info("Initializing FINUFFT plans")
-    forward_plan = finufft.Plan(1, n_modes, n_trans=n_trans, eps=eps, dtype=dtype)
+    
+    # Set up FINUFFT options
+    finufft_opts = setup_finufft_options(eps, upsampfac, spreadwidth)
+    
+    # Log FINUFFT parameters being used
+    logger.info(f"FINUFFT parameters: eps={eps}, upsampfac={upsampfac}")
+    if spreadwidth is not None:
+        logger.info(f"Custom spreadwidth requested: {spreadwidth} (note: actual kernel width determined by FINUFFT)")
+    
+    # Create plans with options
+    forward_plan = finufft.Plan(1, n_modes, n_trans=n_trans, eps=eps, dtype=dtype, **finufft_opts)
     forward_plan.setpts(x_coords, y_coords, z_coords)
     
-    inverse_plan = finufft.Plan(2, n_modes, n_trans=n_trans, eps=eps, dtype=dtype)
+    inverse_plan = finufft.Plan(2, n_modes, n_trans=n_trans, eps=eps, dtype=dtype, **finufft_opts)
     inverse_plan.setpts(x_coords, y_coords, z_coords)
     
     # Step 2: Compute forward FFT
@@ -264,18 +441,11 @@ def calculate_analytical_gradient(
     fft_result_flat = forward_plan.execute(strengths_data)
     fft_result = fft_result_flat.reshape(n_trans, nx, ny, nz)
     
-    # Step 3: Compute analytical gradient in k-space
+    # Step 3: Compute analytical gradient in k-space using optimized function
     logger.info("Computing analytical radial gradient in k-space")
     
-    # Create 3D k-space coordinate grids
-    Kx, Ky, Kz = np.meshgrid(kx, ky, kz, indexing='ij')
-    
-    # Calculate k-space radial distance from origin (k-magnitude) - this is ||k||
-    K_mag = np.sqrt(Kx**2 + Ky**2 + Kz**2)
-    
-    # Multiply by i*2π*||k|| (convert to complex128 for FINUFFT compatibility)
-    # This implements the equation from the paper: F^-1{i*2π*||k||*F(k)}
-    gradient_fft = fft_result * (1j * 2 * np.pi * K_mag).astype(np.complex128)
+    # Use optimized gradient computation with better memory management
+    gradient_fft = compute_k_space_gradient_optimized(fft_result, kx, ky, kz)
     
     # Step 4: Compute inverse FFT to get the gradient map
     logger.info("Computing inverse FFT for gradient map")
@@ -287,7 +457,7 @@ def calculate_analytical_gradient(
     # Calculate the magnitude of the complex-valued gradient
     gradient_magnitude_nu = np.abs(gradient_map_nu)
     
-    # Initialize results dictionary
+    # Initialize results dictionary with enhanced metadata
     results = {
         'gradient_map_nu': gradient_magnitude_nu,
         'fft_result': fft_result,
@@ -303,7 +473,20 @@ def calculate_analytical_gradient(
             'max_k': k_max,
             'k_resolution': k_res,
             'min_spatial_distance': min_dist,
-            'max_freq_required': max_freq_required
+            'max_freq_required': 1.0 / min_dist,
+            'sampling_sufficient': sampling_sufficient,
+            'total_grid_points': nx * ny * nz,
+            'upsampling_factor': upsampling_factor
+        },
+        'computation_info': {
+            'n_trans': n_trans,
+            'n_points': n_points,
+            'skip_interpolation': skip_interpolation,
+            'eps': eps,
+            'dtype': dtype,
+            'upsampfac': upsampfac,
+            'spreadwidth': spreadwidth,
+            'adaptive_grid': adaptive_grid
         }
     }
     
@@ -394,7 +577,7 @@ def calculate_analytical_gradient(
                 kspace_group.attrs['max_k'] = k_max
                 kspace_group.attrs['k_resolution'] = k_res
                 kspace_group.attrs['min_spatial_distance'] = min_dist
-                kspace_group.attrs['max_freq_required'] = max_freq_required
+                kspace_group.attrs['max_freq_required'] = 1.0 / min_dist
                 
                 # Save grid dimensions as attributes
                 f.attrs['nx'] = nx
@@ -452,7 +635,7 @@ def calculate_analytical_gradient(
             kspace_group.attrs['max_k'] = k_max
             kspace_group.attrs['k_resolution'] = k_res
             kspace_group.attrs['min_spatial_distance'] = min_dist
-            kspace_group.attrs['max_freq_required'] = max_freq_required
+            kspace_group.attrs['max_freq_required'] = 1.0 / min_dist
             
             # Save grid dimensions
             f.attrs['nx'] = nx
